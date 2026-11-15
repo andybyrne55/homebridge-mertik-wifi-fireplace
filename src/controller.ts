@@ -177,6 +177,7 @@ export class FireplaceController extends EventEmitter {
   private lastStatusAt?: number;
   /** Thermostat target set while the fire was off: applied at the next switch-on from HomeKit. */
   private savedTarget?: number;
+  private lastIgniteSentAt?: number;
   private leftOnAlert = false;
   private leftOnTimer?: NodeJS.Timeout;
 
@@ -327,7 +328,6 @@ export class FireplaceController extends EventEmitter {
     const promise = this.enqueue({ kind: 'on', flameByte, explicitFlame: false });
     const saved = this.savedTarget;
     if (saved !== undefined) {
-      this.savedTarget = undefined;
       this.desired = { ...this.desired, mode: 'thermostat', target: saved };
       const thermostat = this.enqueue({ kind: 'mode', mode: 'thermostat', target: saved });
       this.emitUpdate();
@@ -368,7 +368,7 @@ export class FireplaceController extends EventEmitter {
   /** Eco mode (the fireplace sets the flame itself). Never lights the fire: refused while it is off. */
   requestEco(): Promise<boolean> {
     if (!this.canChangeMode()) {
-      this.log.warn('Eco ignored: the fire is off (eco never lights the fire)');
+      this.log.warn('Eco ignored: the fire is not burning (eco never lights the fire)');
       this.emitUpdate();
       return Promise.resolve(false);
     }
@@ -388,13 +388,20 @@ export class FireplaceController extends EventEmitter {
     return promise;
   }
 
+  /** Pilot only in manual mode (standby): no flame, and nothing but switch-on or the slider may relight it. */
+  isManualStandby(): boolean {
+    return this.status?.state === 'pilot' && this.status.mode === 'manual' && this.desired.power !== 'on' && !this.findItem('on');
+  }
+
   /** True while the fire is lit or being lit (or about to be, by a queued switch-on). */
   canChangeMode(): boolean {
     const state = this.status?.state;
     if (this.desired.power === 'off') {
       return false;
     }
-    return state === 'on' || state === 'pilot' || state === 'igniting' || this.findItem('on') !== undefined;
+    // Manual standby (pilot only) is not "on": a switch there must not risk relighting the burner.
+    const manualStandby = state === 'pilot' && this.status?.mode === 'manual';
+    return state === 'on' || state === 'igniting' || (state === 'pilot' && !manualStandby) || this.findItem('on') !== undefined;
   }
 
   /** Set the flame (byte 0x80–0xFF). Debounced; ignites first if the fire is off. Returns to manual mode. */
@@ -423,6 +430,11 @@ export class FireplaceController extends EventEmitter {
   }
 
   requestAux(on: boolean): Promise<boolean> {
+    if (this.isManualStandby()) {
+      this.log.warn('Aux ignored at pilot only: an aux change resets the flame to full and could relight the burner');
+      this.emitUpdate();
+      return Promise.resolve(false);
+    }
     this.removeQueued((c) => c.kind === 'aux');
     this.desired = { ...this.desired, aux: on };
     const promise = this.enqueue({ kind: 'aux', on });
@@ -785,23 +797,47 @@ export class FireplaceController extends EventEmitter {
       if (attempt > 0) {
         this.log.warn(`Off not confirmed, retrying (${attempt}/${retries})`);
       }
-      await this.send(token, cmd.off(), 'off');
-      const started = await this.waitFor((s) => s.shuttingDown || s.state === 'off', this.timing.offResendMs);
+      // Never let a hung send hold up the off (defence in depth; the real connection always settles).
+      await Promise.race([this.send(token, cmd.off(), 'off'), new Promise((r) => setTimeout(r, this.timing.offResendMs))]);
+      // Just after an ignite was written, an "off" frame may predate it: then require the shutdown bit
+      // or two off frames in a row.
+      const recentIgnite = this.lastIgniteSentAt !== undefined && Date.now() - this.lastIgniteSentAt < 15_000;
+      let offFrames = 0;
+      const started = await this.waitFor((s) => {
+        if (s.shuttingDown) {
+          return true;
+        }
+        if (s.state === 'off') {
+          offFrames++;
+          return !recentIgnite || offFrames >= 2;
+        }
+        offFrames = 0;
+        return false;
+      }, this.timing.offResendMs);
       if (token.aborted) {
         return false;
       }
       if (!started) {
         continue;
       }
-      // The shutdown bit alone is not proof: wait until the fireplace actually reports off.
-      const off = this.status?.state === 'off' || await this.waitFor((s) => s.state === 'off', this.timing.offCompleteMs);
-      if (off) {
+      // The shutdown bit alone is not proof: wait until the fireplace actually reports off. If the shutdown ends
+      // without the fire going off (two frames with no shutdown bit and not off), resend at once.
+      let notShutting = 0;
+      const off = this.status?.state === 'off' || await this.waitFor((s) => {
+        if (s.state === 'off') {
+          return true;
+        }
+        notShutting = s.shuttingDown ? 0 : notShutting + 1;
+        return notShutting >= 2;
+      }, this.timing.offCompleteMs);
+      if (token.aborted) {
+        return false;
+      }
+      if (off && this.status?.state === 'off') {
         this.log.info(`Off confirmed after ${this.secondsSince(t0)} s`);
         return true;
       }
-      if (!token.aborted) {
-        this.log.warn(`Shutdown started but the fire did not report off within ${Math.round(this.timing.offCompleteMs / 1000)} s`);
-      }
+      this.log.warn('Shutdown started but the fire did not go off');
     }
     if (token.aborted) {
       return false;
@@ -893,6 +929,7 @@ export class FireplaceController extends EventEmitter {
     this.log.info('Ignite requested');
     const t0 = Date.now();
     const started = (s: FireplaceStatus) => s.igniting || s.state === 'on';
+    this.lastIgniteSentAt = Date.now();
     await this.send(token, cmd.ignite(), 'ignite');
     let ok = await this.waitFor(started, this.timing.igniteBitWaitMs);
     if (token.aborted) {
@@ -1102,6 +1139,9 @@ export class FireplaceController extends EventEmitter {
         return false;
       }
       if (ok) {
+        if (want === 'thermostat') {
+          this.savedTarget = undefined;
+        }
         this.log.info(label);
         return true;
       }

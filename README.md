@@ -99,11 +99,11 @@ An invalid setting is reported in the log and its default is used instead. A fir
 | Switch off | Sends off at once, retries until confirmed, raises the alert if it cannot be confirmed. |
 | Set flame 1–100 % while off | Ignites first, then sets the flame. |
 | Set flame 0 % | Off, or pilot only (`zeroPercent`). |
-| Toggle Aux | Switches the back burner row, then restores your flame level. |
+| Toggle Aux | Switches the back burner row, then restores your flame level. Not available at pilot only (an aux change resets the flame to full). |
 | Set the target temperature while the fire is on (heater tile) | Thermostat mode: the fireplace heats until the room reaches the target, then idles at pilot (tile shows on, not heating), and relights by itself when the room cools. |
 | Set the target temperature while the fire is off | Saved only – the fire stays off. The next time you switch it on, it starts in thermostat mode at that target. |
-| Turn Eco on / off | Eco mode / back to manual, keeping the fire lit. Eco only works while the fire is on; it never lights it. |
-| Turn on the child lock | HomeKit and automations can no longer light the fire or change it; off still works. |
+| Turn Eco on / off | Eco mode / back to manual, keeping the fire lit. Eco only works while the fire is burning or in thermostat mode; it never lights it. |
+| Turn on the child lock | HomeKit and automations can no longer light the fire (from off or from pilot) or change it; off always works. |
 | Use the handset | HomeKit follows within a few seconds and the log says "Changed on handset: …". |
 | Switch on within 3 minutes of switching off | Refused, with a log line saying when to try again. The fireplace does not light reliably sooner (`reigniteWait`). |
 

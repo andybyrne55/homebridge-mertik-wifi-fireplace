@@ -29,6 +29,11 @@ describe('config validation', () => {
     assert.ok(errors.some((e) => e.includes('"name"')));
     assert.ok(errors.some((e) => e.includes('"ip"')));
   });
+  it('rejects a bad port (it is part of the accessory identity)', () => {
+    const { config, errors } = validateFireplace({ name: 'Fire', ip: '192.168.1.101', port: 70000 });
+    assert.equal(config, undefined);
+    assert.ok(errors.some((e) => e.includes('"port"')));
+  });
   it('replaces bad optional settings with defaults and warns', () => {
     const { config, errors, warnings } = validateFireplace({
       name: 'Fire', ip: '192.168.1.101', pollInterval: 2, commandRetries: 9, tileType: 'lightbulb', igniteLevel: 0, debug: 'yes',

@@ -75,7 +75,7 @@ export class FireplaceAccessory {
     this.main.getCharacteristic(C.Active)
       .onGet(() => this.read((v) => (v.power === 'off' ? C.Active.INACTIVE : C.Active.ACTIVE)))
       .onSet((value) => this.write('Active', () => {
-        this.checkLock(value === C.Active.ACTIVE && this.controller.view.power === 'off', 'switching the fire on');
+        this.checkLock(value === C.Active.ACTIVE && this.controller.view.power !== 'on', 'switching the fire on');
         if (value === C.Active.ACTIVE) {
           void this.controller.requestOn();
         } else {
@@ -124,6 +124,11 @@ export class FireplaceAccessory {
       .onGet(() => this.read((v) => v.aux))
       .onSet((value) => this.write('Aux', () => {
         this.checkLock(true, 'switching aux');
+        if (this.controller.isManualStandby()) {
+          this.log.warn('Aux ignored at pilot only: an aux change resets the flame to full and could relight the burner');
+          this.refreshSoon();
+          throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.NOT_ALLOWED_IN_CURRENT_STATE);
+        }
         void this.controller.requestAux(value === true);
       }));
 
@@ -146,7 +151,7 @@ export class FireplaceAccessory {
         this.checkLock(true, 'changing eco mode');
         if (value === true && !this.controller.canChangeMode()) {
           // Eco never lights the fire: a scene or "all switches on" must not ignite it.
-          this.log.warn('Eco ignored: the fire is off (eco never lights the fire)');
+          this.log.warn('Eco ignored: the fire is not burning (eco never lights the fire)');
           this.refreshSoon();
           throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.NOT_ALLOWED_IN_CURRENT_STATE);
         }

@@ -135,6 +135,17 @@ export function validateFireplace(raw: unknown): ValidationResult {
     return v as T;
   };
 
+  // The port is part of the accessory's identity: never fall back silently (that would replace the accessory).
+  let port: number = CONFIG_DEFAULTS.port;
+  if (raw.port !== undefined && raw.port !== null && raw.port !== '') {
+    const p = typeof raw.port === 'number' ? raw.port : Number(raw.port);
+    if (Number.isInteger(p) && p >= 1 && p <= 65535) {
+      port = p;
+    } else {
+      errors.push(`"port" must be a whole number from 1 to 65535 (got ${JSON.stringify(raw.port)})`);
+    }
+  }
+
   let igniteLevel: IgniteLevel = CONFIG_DEFAULTS.igniteLevel;
   const rawLevel = raw.igniteLevel;
   if (rawLevel !== undefined && rawLevel !== null && rawLevel !== '') {
@@ -153,7 +164,7 @@ export function validateFireplace(raw: unknown): ValidationResult {
   const config: FireplaceConfig = {
     name,
     ip,
-    port: int('port', CONFIG_DEFAULTS.port, 1, 65535),
+    port,
     tileType: choice('tileType', CONFIG_DEFAULTS.tileType, ['heater', 'fan'] as const),
     zeroPercent: choice('zeroPercent', CONFIG_DEFAULTS.zeroPercent, ['off', 'pilot'] as const),
     igniteLevel,

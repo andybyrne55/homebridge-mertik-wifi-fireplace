@@ -625,6 +625,29 @@ describe('thermostat and eco', () => {
     assert.equal(ctrl.view.mode, 'manual');
   });
 
+  it('eco and aux are refused at manual standby (pilot only)', async () => {
+    const { ctrl, fake } = await setup((f) => f.setOn(0xff));
+    assert.equal(await ctrl.requestStandby(), true);
+    assert.equal(await ctrl.requestEco(), false);
+    assert.equal(await ctrl.requestAux(false), false);
+    await sleep(200);
+    assert.equal(fake.count('B301'), 0);
+    assert.equal(fake.count('2000'), 0);
+    assert.equal(ctrl.lastStatus?.state, 'pilot');
+  });
+
+  it('a saved target survives a refused switch-on', async () => {
+    const { ctrl } = await setup((f) => f.setOn(0xff));
+    assert.equal(await ctrl.requestOff(), true);
+    assert.equal(await ctrl.requestThermostat(22), true);
+    assert.equal(await ctrl.requestOn(), false, 'refused: re-ignite wait');
+    assert.equal(ctrl.view.targetTemperature, 22);
+    await sleep(700);
+    assert.equal(await ctrl.requestOn(), true);
+    assert.equal(ctrl.lastStatus?.mode, 'thermostat');
+    assert.equal(ctrl.lastStatus?.targetTemperature, 22);
+  });
+
   it('off from thermostat mode is verified as usual, without a "manual mode" handset log', async () => {
     const { ctrl, logs } = await setup((f) => f.setOn(0xff));
     assert.equal(await ctrl.requestThermostat(25), true);
@@ -698,8 +721,18 @@ describe('off is never held up', () => {
     }, { commandRetries: 1 });
     assert.equal(await ctrl.requestOff(), false);
     assert.equal(fake.count('10'), 2);
-    assert.ok(has(logs, 'did not report off'));
+    assert.ok(has(logs, 'did not go off'));
     assert.equal(ctrl.view.alert, true);
     assert.ok(!has(logs, 'Off confirmed'));
+  });
+
+  it('a stalled shutdown is resent promptly, not after the full wait', async () => {
+    const { ctrl } = await setup((f) => {
+      f.setOn(0xff);
+      f.shutdownStalls = true;
+    }, { commandRetries: 1 });
+    const t0 = Date.now();
+    assert.equal(await ctrl.requestOff(), false);
+    assert.ok(Date.now() - t0 < 2 * (300 + 800), `took ${Date.now() - t0} ms`);
   });
 });

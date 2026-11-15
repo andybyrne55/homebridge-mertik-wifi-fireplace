@@ -229,7 +229,7 @@ Debug (config `debug`): raw frames, queue activity, state transitions.
   Use npm trusted publishing (OIDC) so no token is stored. CHECK the current npm docs when setting this up:
   the first publish of a new package may have to be done once by the owner before a trusted publisher can
   be attached.
-- First release: `0.1.0-beta.1` under the `beta` dist-tag. Repo goes public at that point (owner's approval).
+- First release: `1.0.0` (owner, 15 Nov: no beta). Repo goes public at that point (owner's approval).
 - README: features, install, config table, HomeKit behaviour, troubleshooting, protocol notes, and a one-line
   credit to the projects whose protocol work this builds on. No comparisons, and no mention of other plugins
   anywhere else in the code or docs (owner, 15 Nov). Not affiliated with Maxitrol.
@@ -241,7 +241,7 @@ Debug (config `debug`): raw frames, queue activity, state transitions.
 3. HomeKit accessory + config schema.
 4. Real-hardware test on the owner's Homebridge (needs owner's OK: install on the Pi).
 5. README, CI, release workflow.
-6. Publish `0.1.0-beta.1` (needs owner: npm account, OK to make the repo public, OK to publish).
+6. Publish `1.0.0` (needs owner: OK to make the repo public, OK to publish).
 
 ## 11. Open questions / v2
 
@@ -271,6 +271,10 @@ Debug (config `debug`): raw frames, queue activity, state transitions.
   - Invalid optional settings fall back to defaults; an entry with a bad name/ip never causes cached accessories to be
     removed.
   - Reachable/healthy windows scale with `pollInterval`.
+  - Child lock refuses Active=1 unless the fire is already burning (also from pilot). Eco and aux are refused at manual
+    standby (pilot only), as an aux change resets the flame to full and might relight the burner (unmeasured).
+  - A stalled shutdown (bit clears without the fire going off) is resent at once. An off right after an ignite needs
+    the shutdown bit or two off frames. A bad `port` rejects the entry (it is part of the accessory identity).
   - HeaterCooler/Fanv2 do not support StatusFault in HAP-NodeJS, so unreachable = "No Response" (replaces §5's StatusFault).
 - v2 (original note): "left on too long" alert (owner's request, 15 Nov). A configurable time (e.g. `onAlertHours`, off by default)
   after which the plugin raises an alert if the main burner has been lit continuously, in case something

@@ -19,7 +19,7 @@ export type IgniteLevel = 'last' | 'full' | number;
 export interface ControllerOptions {
   commandRetries: number;
   igniteLevel: IgniteLevel;
-  restoreFlameAfterAux: boolean;
+  restoreFlameAfterBoost: boolean;
   shutOffAfterConnectionLoss: boolean;
   connectionLossMinutes: number;
   /** Raise the left-on alert after the main burner has been lit continuously this long. 0 = off. */
@@ -318,7 +318,7 @@ export class FireplaceController extends EventEmitter {
     // that must not ignite again or reset the flame to the ignite level.
     const state = this.status?.state;
     const offPending = this.findItem('off') !== undefined;
-    // Thermostat/eco waiting at pilot is "on" too: switching on must not knock it back to manual.
+    // Thermostat (or eco set on the handset) waiting at pilot is "on" too: switching on must not knock it back to manual.
     const autoWaiting = state === 'pilot' && this.status?.mode !== 'manual';
     if (!offPending && (this.desired.power === 'on' || state === 'on' || state === 'igniting' || autoWaiting)) {
       return Promise.resolve(true);
@@ -365,43 +365,9 @@ export class FireplaceController extends EventEmitter {
     return promise;
   }
 
-  /** Eco mode (the fireplace sets the flame itself). Never lights the fire: refused while it is off. */
-  requestEco(): Promise<boolean> {
-    if (!this.canChangeMode()) {
-      this.log.warn('Eco ignored: the fire is not burning (eco never lights the fire)');
-      this.emitUpdate();
-      return Promise.resolve(false);
-    }
-    this.removeQueued((c) => c.kind === 'mode');
-    this.desired = { ...this.desired, mode: 'eco' };
-    const promise = this.enqueue({ kind: 'mode', mode: 'eco' });
-    this.emitUpdate();
-    return promise;
-  }
-
-  /** Back to manual mode, keeping the fire as it is. */
-  requestManual(): Promise<boolean> {
-    this.removeQueued((c) => c.kind === 'mode');
-    this.desired = { ...this.desired, mode: 'manual' };
-    const promise = this.enqueue({ kind: 'mode', mode: 'manual' });
-    this.emitUpdate();
-    return promise;
-  }
-
   /** Pilot only in manual mode (standby): no flame, and nothing but switch-on or the slider may relight it. */
   isManualStandby(): boolean {
     return this.status?.state === 'pilot' && this.status.mode === 'manual' && this.desired.power !== 'on' && !this.findItem('on');
-  }
-
-  /** True while the fire is lit or being lit (or about to be, by a queued switch-on). */
-  canChangeMode(): boolean {
-    const state = this.status?.state;
-    if (this.desired.power === 'off') {
-      return false;
-    }
-    // Manual standby (pilot only) is not "on": a switch there must not risk relighting the burner.
-    const manualStandby = state === 'pilot' && this.status?.mode === 'manual';
-    return state === 'on' || state === 'igniting' || (state === 'pilot' && !manualStandby) || this.findItem('on') !== undefined;
   }
 
   /** Set the flame (byte 0x80–0xFF). Debounced; ignites first if the fire is off. Returns to manual mode. */
@@ -431,7 +397,7 @@ export class FireplaceController extends EventEmitter {
 
   requestAux(on: boolean): Promise<boolean> {
     if (this.isManualStandby()) {
-      this.log.warn('Aux ignored at pilot only: an aux change resets the flame to full and could relight the burner');
+      this.log.warn('Boost ignored at pilot only: a boost change resets the flame to full and could relight the burner');
       this.emitUpdate();
       return Promise.resolve(false);
     }
@@ -616,7 +582,7 @@ export class FireplaceController extends EventEmitter {
       this.log.info(`Changed on handset: thermostat ${s.targetTemperature.toFixed(1)} °C`);
     }
     if (prev.auxOn !== s.auxOn) {
-      this.log.info(`Changed on handset: aux ${s.auxOn ? 'on' : 'off'}`);
+      this.log.info(`Changed on handset: boost ${s.auxOn ? 'on' : 'off'}`);
     }
     if (prev.mode !== s.mode && !(s.mode === 'manual' && (s.state === 'off' || s.state === 'shuttingDown'))) {
       this.log.info(`Changed on handset: ${s.mode} mode`);
@@ -659,7 +625,7 @@ export class FireplaceController extends EventEmitter {
     default:
       text = 'fire off';
     }
-    text += `, aux ${s.auxOn ? 'on' : 'off'}`;
+    text += `, boost ${s.auxOn ? 'on' : 'off'}`;
     if (s.mode !== 'manual') {
       text += `, ${s.mode} mode`;
     }
@@ -1027,7 +993,7 @@ export class FireplaceController extends EventEmitter {
     const flameBefore = this.lastFlameByte;
     const wasLit = this.status?.state === 'on';
     const word = on ? 'on' : 'off';
-    const restore = this.options.restoreFlameAfterAux && wasLit && flameBefore !== undefined && flameBefore < FLAME_MAX - FLAME_TOLERANCE;
+    const restore = this.options.restoreFlameAfterBoost && wasLit && flameBefore !== undefined && flameBefore < FLAME_MAX - FLAME_TOLERANCE;
     if (restore && this.desired.power !== 'off') {
       // The unit jumps to full on an aux change; show the level we are about to restore, not a flash of 100 %.
       this.desired = { ...this.desired, power: 'on', flameByte: flameBefore };
@@ -1036,19 +1002,19 @@ export class FireplaceController extends EventEmitter {
     let ok = false;
     for (let attempt = 0; attempt < 2 && !ok && !token.aborted; attempt++) {
       if (attempt > 0) {
-        this.log.warn(`Aux ${word} not confirmed, resending`);
+        this.log.warn(`Boost ${word} not confirmed, resending`);
       }
-      await this.send(token, cmd.aux(on), `aux ${word}`);
+      await this.send(token, cmd.aux(on), `boost (aux) ${word}`);
       ok = await this.waitFor((s) => s.auxOn === on, this.timing.auxTimeoutMs);
     }
     if (token.aborted) {
       return false;
     }
     if (!ok) {
-      this.log.error(`Aux ${word} not confirmed`);
+      this.log.error(`Boost ${word} not confirmed`);
       return false;
     }
-    this.log.info(`Aux ${word}`);
+    this.log.info(`Boost ${word}`);
     if (restore && flameBefore !== undefined) {
       // The unit resets the flame to full on every aux change; wait for that before restoring.
       await this.waitFor((s) => s.state !== 'on' || s.flameHeight >= FLAME_MAX - FLAME_TOLERANCE, this.timing.auxFlameResetWaitMs);

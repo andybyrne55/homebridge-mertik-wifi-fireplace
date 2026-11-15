@@ -3,7 +3,7 @@
   "displayName": "Mertik WiFi Fireplace",
   "type": "module",
   "version": "1.0.0",
-  "description": "Reliable HomeKit control for Mertik Maxitrol WiFi gas fireplaces: verified on/off, flame height, aux burner, thermostat, eco, child lock, and shutdown-failure and left-on alerts.",
+  "description": "Reliable HomeKit control for Mertik Maxitrol WiFi gas fireplaces: verified on/off, flame height, boost burner, thermostat, child lock, and shutdown-failure and left-on alerts.",
   "author": "Andrew Byrne",
   "license": "Apache-2.0",
   "homepage": "https://github.com/andybyrne55/homebridge-mertik-wifi-fireplace#readme",

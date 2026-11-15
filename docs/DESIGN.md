@@ -260,7 +260,10 @@ Debug (config `debug`): raw frames, queue activity, state transitions.
     allowed. Software only – the fireplace has no lock in its protocol. State persisted in the accessory context. Built.
   - Thermostat: setting the target temperature (HeatingThresholdTemperature) puts the fire in thermostat mode;
     moving the flame slider returns to manual. Last touched wins. Target 5–36 °C in 0.5 steps. Built.
-  - Eco: an Eco switch; any flame change returns to manual. Built.
+  - Eco: built, then removed before 1.0.0 (owner, 15 Nov: "did practically nothing" – the flame slider covers it).
+    Eco set on the handset is still recognised and reported.
+  - The aux switch is called "Boost" in HomeKit, settings and logs (owner, 15 Nov). Config keys `boostSwitch`,
+    `restoreFlameAfterBoost`.
   - Left-on time counts while the burner is lit or the thermostat idles at pilot (so thermostat cycling does not
     restart the clock). Manual standby (pilot only) does not count and resets it (owner default, 15 Nov).
 - Final review (15 Nov), safety rules added:

@@ -45,7 +45,7 @@ const FAST_CTRL: Partial<ControllerTiming> = {
 const DEFAULT_OPTIONS: ControllerOptions = {
   commandRetries: 3,
   igniteLevel: 'last',
-  restoreFlameAfterAux: true,
+  restoreFlameAfterBoost: true,
   shutOffAfterConnectionLoss: false,
   connectionLossMinutes: 5,
 };
@@ -377,12 +377,12 @@ describe('aux', () => {
     assert.ok(!shown.includes(100), 'no flash of 100 % while restoring');
     assert.equal(fake.aux, false);
     assert.ok(Math.abs(ctrl.lastStatus!.flameHeight - 0xa0) <= 8, 'flame restored');
-    assert.ok(has(logs, 'Aux off'));
+    assert.ok(has(logs, 'Boost off'));
     assert.ok(has(logs, 'Flame restored to'));
   });
 
-  it('does not restore when restoreFlameAfterAux is off', async () => {
-    const { ctrl } = await setup((f) => f.setOn(0xff, true), { restoreFlameAfterAux: false });
+  it('does not restore when restoreFlameAfterBoost is off', async () => {
+    const { ctrl } = await setup((f) => f.setOn(0xff, true), { restoreFlameAfterBoost: false });
     assert.equal(await ctrl.requestFlame(0xa0), true);
     assert.equal(await ctrl.requestAux(false), true);
     await sleep(200);
@@ -446,7 +446,7 @@ describe('handset', () => {
 
     fake.handsetAux(false);
     await waitUntil(() => !ctrl.view.aux, 2_000, 'aux off');
-    assert.ok(has(logs, 'Changed on handset: aux off'));
+    assert.ok(has(logs, 'Changed on handset: boost off'));
 
     fake.handsetOff();
     await waitUntil(() => ctrl.view.power === 'off', 2_000, 'off');
@@ -548,7 +548,7 @@ describe('left-on alert', () => {
   });
 });
 
-describe('thermostat and eco', () => {
+describe('thermostat', () => {
   it('target set while off is saved, does not light the fire, and applies at the next switch-on', async () => {
     const { ctrl, fake, logs } = await setup();
     assert.equal(await ctrl.requestThermostat(25), true);
@@ -595,43 +595,11 @@ describe('thermostat and eco', () => {
     assert.equal(fake.received.filter((c) => c.startsWith('B2FD')).length, 1);
   });
 
-  it('eco on, then a flame change returns to manual first', async () => {
-    const { ctrl, fake, logs } = await setup((f) => f.setOn(0xff));
-    assert.equal(await ctrl.requestEco(), true);
-    assert.equal(ctrl.lastStatus?.mode, 'eco');
-    assert.ok(has(logs, 'Eco mode'));
-    assert.equal(await ctrl.requestFlame(0xa0), true);
-    const b0 = fake.received.lastIndexOf('B0');
-    const flame = fake.received.findIndex((c) => c.startsWith('16'));
-    assert.ok(b0 !== -1 && b0 < flame);
-    assert.equal(ctrl.lastStatus?.mode, 'manual');
-  });
-
-  it('eco switch off returns to manual and keeps the fire lit', async () => {
-    const { ctrl } = await setup((f) => f.setOn(0xff));
-    assert.equal(await ctrl.requestEco(), true);
-    assert.equal(await ctrl.requestManual(), true);
-    assert.equal(ctrl.lastStatus?.mode, 'manual');
-    assert.equal(ctrl.lastStatus?.state, 'on');
-  });
-
-  it('eco never lights the fire', async () => {
-    const { ctrl, fake, logs } = await setup();
-    assert.equal(await ctrl.requestEco(), false);
-    await sleep(300);
-    assert.equal(fake.count('1A'), 0);
-    assert.equal(fake.count('B301'), 0);
-    assert.ok(has(logs, 'eco never lights the fire'));
-    assert.equal(ctrl.view.mode, 'manual');
-  });
-
-  it('eco and aux are refused at manual standby (pilot only)', async () => {
+  it('boost is refused at manual standby (pilot only)', async () => {
     const { ctrl, fake } = await setup((f) => f.setOn(0xff));
     assert.equal(await ctrl.requestStandby(), true);
-    assert.equal(await ctrl.requestEco(), false);
     assert.equal(await ctrl.requestAux(false), false);
     await sleep(200);
-    assert.equal(fake.count('B301'), 0);
     assert.equal(fake.count('2000'), 0);
     assert.equal(ctrl.lastStatus?.state, 'pilot');
   });

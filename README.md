@@ -17,8 +17,8 @@ retried if it did not take effect. If the fire cannot be confirmed off, you get 
 - **On / off, verified.** Off is sent immediately (no debounce), jumps ahead of anything queued, is sent even if
   the plugin believes the fire is already off, and is retried until the fireplace confirms it.
 - **Flame height 0–100 %.** 1–100 % covers the fireplace's whole usable range. Dragging the slider sends one command.
-- **Aux burner switch** (second burner row). The fireplace jumps to full flame when aux changes; the plugin puts
-  your flame level back.
+- **Boost switch:** lights the second (back) row of burners for a bigger fire (the remote calls this "aux"). The
+  fireplace jumps to full flame when boost changes; the plugin puts your flame level back.
 - **The real state in HomeKit**, including changes made with the handset. While a command is running, HomeKit
   shows what you asked for and does not flip back.
 - **Shutdown alert sensor** (contact or leak sensor) that trips **only** when the fire could not be confirmed off
@@ -30,7 +30,6 @@ retried if it did not take effect. If the fire cannot be confirmed off, you get 
   always works, and the handset is not affected.
 - **Thermostat:** set a target temperature on the Fire tile and the fireplace holds the room at it, lighting and idling
   the burner by itself. Move the flame slider to go back to manual.
-- **Eco mode** switch: the fireplace sets the flame itself to save gas.
 - **Clear logs:** one line per event and its outcome ("Ignite requested", "Lit after 38 s", "Off confirmed after
   9 s", "Changed on handset: flame 60 %"). Packet-level logging is available with the `debug` option.
 - No runtime dependencies, no analytics, writes no files.
@@ -74,9 +73,8 @@ Use the plugin's settings in the Homebridge UI, or add this to `config.json`:
 | `zeroPercent` | `off` | What setting the flame to 0 % does: `off` (switch off) or `pilot` (standby: main burner out, pilot stays lit). |
 | `igniteLevel` | `last` | Flame after switching on: `last` (the last level used, from HomeKit or the handset), `full`, or a percentage `1`–`100`. |
 | `thermostatControl` | `true` | Heater tile: setting the target temperature switches to thermostat mode. |
-| `ecoSwitch` | `true` | Show the eco switch. |
-| `auxSwitch` | `true` | Show a switch for the second burner row. |
-| `restoreFlameAfterAux` | `true` | Put the flame back after an aux change (the fireplace resets it to full). |
+| `boostSwitch` | `true` | Show the boost switch (second, back row of burners). |
+| `restoreFlameAfterBoost` | `true` | Put the flame level back after boost is switched (the fireplace jumps to full). |
 | `alertSensor` | `contact` | Sensor type for the shutdown and left-on alerts: `contact` (opens on alert), `leak` (leak detected on alert), or `none` (no alert sensors at all). |
 | `leftOnAlertHours` | `4` | Raise the left-on alert after the fire has been on continuously this long (hours, 0 = off): burning, or idling at pilot in thermostat mode. Pilot-only standby does not count. The count starts again if Homebridge restarts. |
 | `leftOnSwitchOff` | `false` | Also switch the fire off when the left-on alert is raised. |
@@ -99,16 +97,33 @@ An invalid setting is reported in the log and its default is used instead. A fir
 | Switch off | Sends off at once, retries until confirmed, raises the alert if it cannot be confirmed. |
 | Set flame 1–100 % while off | Ignites first, then sets the flame. |
 | Set flame 0 % | Off, or pilot only (`zeroPercent`). |
-| Toggle Aux | Switches the back burner row, then restores your flame level. Not available at pilot only (an aux change resets the flame to full). |
+| Toggle Boost | Lights or puts out the back row of burners, then restores your flame level. Not available at pilot only (a boost change resets the flame to full). |
 | Set the target temperature while the fire is on (heater tile) | Thermostat mode: the fireplace heats until the room reaches the target, then idles at pilot (tile shows on, not heating), and relights by itself when the room cools. |
 | Set the target temperature while the fire is off | Saved only – the fire stays off. The next time you switch it on, it starts in thermostat mode at that target. |
-| Turn Eco on / off | Eco mode / back to manual, keeping the fire lit. Eco only works while the fire is burning or in thermostat mode; it never lights it. |
 | Turn on the child lock | HomeKit and automations can no longer light the fire (from off or from pilot) or change it; off always works. |
 | Use the handset | HomeKit follows within a few seconds and the log says "Changed on handset: …". |
 | Switch on within 3 minutes of switching off | Refused, with a log line saying when to try again. The fireplace does not light reliably sooner (`reigniteWait`). |
 
 When the fireplace cannot be reached the tile shows **No Response**. The plugin keeps reconnecting in the
 background.
+
+## Get notified when an alert trips
+
+The shutdown alert ("Fire Shutdown Alert") and the left-on alert ("Fire Left On") only help if someone is told.
+The Home app does not notify you about sensors until you switch it on, per sensor and per person:
+
+1. In the Home app, open the sensor (touch and hold its tile, or open it from the Fire accessory) and go to its
+   settings.
+2. Open **Status and Notifications** and turn on **Allow Notifications**. Do this for both alert sensors.
+3. Make sure notifications for the Home app are allowed on your iPhone (**Settings → Notifications → Home**).
+4. Everyone who should be told needs to do steps 1–3 on their own device.
+
+To get notifications while you are away from home, your home needs a home hub (an Apple TV, HomePod or iPad set up
+as a home hub). With the contact sensor type (the default), the notification says the sensor "opened" when the alert
+trips.
+
+You can also use the sensors in Home app automations, for example to turn on a light or play a sound when the
+fire has been left on.
 
 ## Troubleshooting
 
@@ -130,9 +145,9 @@ background.
 ## Protocol notes
 
 The module listens on TCP port 2000 and speaks a plain-text protocol: `STX` + ASCII + `ETX`. Commands are the
-prefix `3030303080` plus a short code (`03` status, `1A` ignite, `10` off, `16xx` flame height, `2001`/`2000` aux).
+prefix `3030303080` plus a short code (`03` status, `1A` ignite, `10` off, `16xx` flame height, `2001`/`2000` aux, which this plugin calls boost).
 The status reply is a 106-character hex string with the flame height, a flags word (shutting down, pilot,
-igniting, aux), the mode, room and target temperature, and the device name.
+igniting, aux/boost), the mode, room and target temperature, and the device name.
 
 Things this plugin relies on, all measured on a real fireplace:
 
@@ -142,7 +157,7 @@ Things this plugin relies on, all measured on a real fireplace:
 - After a turn-down the pilot ("guard flame") bit can read 0 for 20–30 s while the fire is clearly lit, so
   "off" is never derived from that bit alone.
 - Values below `80` are reachable only going down and look the same as `80`; 1–100 % therefore maps to `80`–`FF`.
-- Changing aux, from WiFi or the handset, resets the flame to full.
+- Changing aux (boost), from WiFi or the handset, resets the flame to full.
 
 The full specification, with captured frames, is in [docs/DESIGN.md](docs/DESIGN.md).
 

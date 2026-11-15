@@ -21,11 +21,10 @@ export class FireplaceAccessory {
   private readonly connection: Connection;
   private readonly log: FireplaceLogger;
   private readonly main: Service;
-  private readonly auxService?: Service;
+  private readonly boostService?: Service;
   private readonly alertService?: Service;
   private readonly leftOnService?: Service;
   private readonly lockService?: Service;
-  private readonly ecoService?: Service;
   private lastReachable?: boolean;
 
   constructor(
@@ -46,7 +45,7 @@ export class FireplaceAccessory {
     this.controller = new FireplaceController(this.connection, this.log, {
       commandRetries: config.commandRetries,
       igniteLevel: config.igniteLevel,
-      restoreFlameAfterAux: config.restoreFlameAfterAux,
+      restoreFlameAfterBoost: config.restoreFlameAfterBoost,
       shutOffAfterConnectionLoss: config.shutOffAfterConnectionLoss,
       connectionLossMinutes: config.connectionLossMinutes,
       leftOnAlertMs: config.leftOnAlertHours * 3_600_000,
@@ -118,14 +117,14 @@ export class FireplaceAccessory {
       }
     }
 
-    // ---- aux switch
-    this.auxService = this.optionalService(S.Switch, 'aux', config.auxSwitch, `${config.name} Aux`);
-    this.auxService?.getCharacteristic(C.On)
+    // ---- boost switch (the second burner row; "aux" in the fireplace's protocol and remote)
+    this.boostService = this.optionalService(S.Switch, 'aux', config.boostSwitch, `${config.name} Boost`, `${config.name} Aux`);
+    this.boostService?.getCharacteristic(C.On)
       .onGet(() => this.read((v) => v.aux))
-      .onSet((value) => this.write('Aux', () => {
-        this.checkLock(true, 'switching aux');
+      .onSet((value) => this.write('Boost', () => {
+        this.checkLock(true, 'switching boost');
         if (this.controller.isManualStandby()) {
-          this.log.warn('Aux ignored at pilot only: an aux change resets the flame to full and could relight the burner');
+          this.log.warn('Boost ignored at pilot only: a boost change resets the flame to full and could relight the burner');
           this.refreshSoon();
           throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.NOT_ALLOWED_IN_CURRENT_STATE);
         }
@@ -143,20 +142,8 @@ export class FireplaceAccessory {
     leak?.getCharacteristic(C.LeakDetected)
       .onGet(() => (this.controller.view.alert ? C.LeakDetected.LEAK_DETECTED : C.LeakDetected.LEAK_NOT_DETECTED));
 
-    // ---- eco switch
-    this.ecoService = this.optionalService(S.Switch, 'eco', config.ecoSwitch, `${config.name} Eco`);
-    this.ecoService?.getCharacteristic(C.On)
-      .onGet(() => this.read((v) => v.mode === 'eco'))
-      .onSet((value) => this.write('Eco', () => {
-        this.checkLock(true, 'changing eco mode');
-        if (value === true && !this.controller.canChangeMode()) {
-          // Eco never lights the fire: a scene or "all switches on" must not ignite it.
-          this.log.warn('Eco ignored: the fire is not burning (eco never lights the fire)');
-          this.refreshSoon();
-          throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.NOT_ALLOWED_IN_CURRENT_STATE);
-        }
-        void (value === true ? this.controller.requestEco() : this.controller.requestManual());
-      }));
+    // ---- remove the eco switch that pre-release builds had
+    this.optionalService(S.Switch, 'eco', false, `${config.name} Eco`);
 
     // ---- left-on alert sensor (same sensor type as the shutdown alert)
     const wantLeftOn = config.leftOnAlertHours > 0;
@@ -273,8 +260,8 @@ export class FireplaceAccessory {
           this.set(this.main, C.CurrentTemperature, this.temperature(view), recovered);
         }
       }
-      if (this.auxService) {
-        this.set(this.auxService, C.On, view.aux, recovered);
+      if (this.boostService) {
+        this.set(this.boostService, C.On, view.aux, recovered);
       }
       if (this.alertService) {
         if (this.config.alertSensor === 'contact') {
@@ -295,9 +282,6 @@ export class FireplaceAccessory {
       if (this.lockService) {
         this.set(this.lockService, C.On, this.locked, recovered);
       }
-      if (this.ecoService) {
-        this.set(this.ecoService, C.On, view.mode === 'eco', recovered);
-      }
       if (this.config.tileType === 'heater' && this.config.thermostatControl && view.targetTemperature !== undefined) {
         this.set(this.main, C.HeatingThresholdTemperature, clampTarget(view.targetTemperature), recovered);
       }
@@ -313,7 +297,7 @@ export class FireplaceAccessory {
     }
   }
 
-  private optionalService(type: WithUUID<typeof Service>, subtype: string, wanted: boolean, name: string): Service | undefined {
+  private optionalService(type: WithUUID<typeof Service>, subtype: string, wanted: boolean, name: string, oldName?: string): Service | undefined {
     const C = this.platform.Characteristic;
     const existing = this.accessory.getServiceById(type, subtype);
     if (!wanted) {
@@ -324,6 +308,10 @@ export class FireplaceAccessory {
     }
     if (existing) {
       existing.setCharacteristic(C.Name, name);
+      // Rename in the Home app too, unless the user has given it a name of their own.
+      if (oldName && existing.testCharacteristic(C.ConfiguredName) && existing.getCharacteristic(C.ConfiguredName).value === oldName) {
+        existing.setCharacteristic(C.ConfiguredName, name);
+      }
       return existing;
     }
     const service = this.accessory.addService(type, name, subtype);

@@ -18,8 +18,8 @@ export interface FireplaceConfig {
   tileType: TileType;
   zeroPercent: ZeroPercent;
   igniteLevel: IgniteLevel;
-  auxSwitch: boolean;
-  restoreFlameAfterAux: boolean;
+  boostSwitch: boolean;
+  restoreFlameAfterBoost: boolean;
   alertSensor: AlertSensor;
   shutOffAfterConnectionLoss: boolean;
   connectionLossMinutes: number;
@@ -30,7 +30,6 @@ export interface FireplaceConfig {
   leftOnSwitchOff: boolean;
   childLockSwitch: boolean;
   thermostatControl: boolean;
-  ecoSwitch: boolean;
   debug: boolean;
 }
 
@@ -39,8 +38,8 @@ export const CONFIG_DEFAULTS = {
   tileType: 'heater' as TileType,
   zeroPercent: 'off' as ZeroPercent,
   igniteLevel: 'last' as IgniteLevel,
-  auxSwitch: true,
-  restoreFlameAfterAux: true,
+  boostSwitch: true,
+  restoreFlameAfterBoost: true,
   alertSensor: 'contact' as AlertSensor,
   shutOffAfterConnectionLoss: false,
   connectionLossMinutes: 5,
@@ -51,7 +50,6 @@ export const CONFIG_DEFAULTS = {
   leftOnSwitchOff: false,
   childLockSwitch: true,
   thermostatControl: true,
-  ecoSwitch: true,
   debug: false,
 };
 
@@ -168,8 +166,8 @@ export function validateFireplace(raw: unknown): ValidationResult {
     tileType: choice('tileType', CONFIG_DEFAULTS.tileType, ['heater', 'fan'] as const),
     zeroPercent: choice('zeroPercent', CONFIG_DEFAULTS.zeroPercent, ['off', 'pilot'] as const),
     igniteLevel,
-    auxSwitch: bool('auxSwitch', CONFIG_DEFAULTS.auxSwitch),
-    restoreFlameAfterAux: bool('restoreFlameAfterAux', CONFIG_DEFAULTS.restoreFlameAfterAux),
+    boostSwitch: bool('boostSwitch', CONFIG_DEFAULTS.boostSwitch),
+    restoreFlameAfterBoost: bool('restoreFlameAfterBoost', CONFIG_DEFAULTS.restoreFlameAfterBoost),
     alertSensor: choice('alertSensor', CONFIG_DEFAULTS.alertSensor, ['none', 'contact', 'leak'] as const),
     shutOffAfterConnectionLoss: bool('shutOffAfterConnectionLoss', CONFIG_DEFAULTS.shutOffAfterConnectionLoss),
     connectionLossMinutes: num('connectionLossMinutes', CONFIG_DEFAULTS.connectionLossMinutes, 0, 1440),
@@ -180,7 +178,6 @@ export function validateFireplace(raw: unknown): ValidationResult {
     leftOnSwitchOff: bool('leftOnSwitchOff', CONFIG_DEFAULTS.leftOnSwitchOff),
     childLockSwitch: bool('childLockSwitch', CONFIG_DEFAULTS.childLockSwitch),
     thermostatControl: bool('thermostatControl', CONFIG_DEFAULTS.thermostatControl),
-    ecoSwitch: bool('ecoSwitch', CONFIG_DEFAULTS.ecoSwitch),
     debug: bool('debug', CONFIG_DEFAULTS.debug),
   };
 

@@ -12,7 +12,7 @@ describe('config validation', () => {
   it('accepts every option', () => {
     const { config } = validateFireplace({
       name: 'Fire', ip: 'fire.local', port: 2001, tileType: 'fan', zeroPercent: 'pilot', igniteLevel: '60',
-      auxSwitch: false, restoreFlameAfterAux: false, alertSensor: 'leak', shutOffAfterConnectionLoss: true,
+      boostSwitch: false, restoreFlameAfterBoost: false, alertSensor: 'leak', shutOffAfterConnectionLoss: true,
       connectionLossMinutes: 10, pollInterval: 30, commandRetries: 5, debug: true, leftOnAlertHours: 0, childLockSwitch: false,
     });
     assert.equal(config?.igniteLevel, 60);

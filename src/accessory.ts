@@ -77,13 +77,14 @@ export class FireplaceAccessory {
     if (heater) {
       this.main.getCharacteristic(C.CurrentHeaterCoolerState)
         .onGet(() => this.read((v) => this.heaterState(v)));
+      // Set the value before restricting validValues, or HAP warns that the default (0) is not allowed.
+      this.main.getCharacteristic(C.TargetHeaterCoolerState).updateValue(C.TargetHeaterCoolerState.HEAT);
       this.main.getCharacteristic(C.TargetHeaterCoolerState)
         .setProps({ validValues: [C.TargetHeaterCoolerState.HEAT] })
         .onGet(() => C.TargetHeaterCoolerState.HEAT)
         .onSet(() => undefined);
       this.main.getCharacteristic(C.CurrentTemperature)
         .onGet(() => this.read((v) => this.temperature(v)));
-      this.main.updateCharacteristic(C.TargetHeaterCoolerState, C.TargetHeaterCoolerState.HEAT);
     }
 
     // ---- aux switch

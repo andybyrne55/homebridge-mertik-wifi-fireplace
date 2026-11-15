@@ -1,0 +1,173 @@
+# homebridge-mertik-wifi
+
+[![Build, lint and test](https://github.com/andybyrne55/homebridge-mertik-wifi/actions/workflows/build.yml/badge.svg)](https://github.com/andybyrne55/homebridge-mertik-wifi/actions/workflows/build.yml)
+[![npm](https://img.shields.io/npm/v/homebridge-mertik-wifi/beta)](https://www.npmjs.com/package/homebridge-mertik-wifi)
+
+HomeKit control for gas fireplaces with a **Mertik Maxitrol WiFi module** (GV60 family), through [Homebridge](https://homebridge.io).
+
+The goal is reliability first: every command is checked against what the fireplace itself reports, and
+retried if it did not take effect. If the fire cannot be confirmed off, you get an alert in the Home app.
+
+> **Safety.** This plugin is a convenience, not a safety device. Keep the handset within reach, follow the
+> manufacturer's instructions, and never rely on HomeKit automations to switch a gas fire off when nobody
+> is at home.
+
+## Features
+
+- **On / off, verified.** Off is sent immediately (no debounce), jumps ahead of anything queued, is sent even if
+  the plugin believes the fire is already off, and is retried until the fireplace confirms it.
+- **Flame height 0–100 %.** 1–100 % covers the fireplace's whole usable range. Dragging the slider sends one command.
+- **Aux burner switch** (second burner row). The fireplace jumps to full flame when aux changes; the plugin puts
+  your flame level back.
+- **The real state in HomeKit**, including changes made with the handset. While a command is running, HomeKit
+  shows what you asked for and does not flip back.
+- **Shutdown alert sensor** (contact or leak sensor) that trips **only** when the fire could not be confirmed off
+  after all retries. It does not trip because the fireplace is merely unreachable while off, and it clears by
+  itself once the fire is confirmed off.
+- **Thermostat and eco mode** set on the handset are recognised and logged. Controlling them is planned for a
+  later version.
+- **Clear logs:** one line per event and its outcome ("Ignite requested", "Lit after 38 s", "Off confirmed after
+  9 s", "Changed on handset: flame 60 %"). Packet-level logging is available with the `debug` option.
+- No runtime dependencies, no analytics, writes no files.
+
+## Requirements
+
+- A Mertik Maxitrol WiFi module already set up on your network (with the Mertik / fireplace app).
+- A **fixed IP address** for the module: set a DHCP reservation on your router.
+- Homebridge 1.8 or 2.x, Node.js 22, 24 or 26.
+
+## Installation
+
+Search for **Mertik WiFi** in the Homebridge UI plugins tab, or:
+
+```sh
+npm install -g homebridge-mertik-wifi@beta
+```
+
+If you used `homebridge-mertik-fireplace` before, disable it first (see [Migrating](#migrating-from-homebridge-mertik-fireplace)).
+
+## Configuration
+
+Use the plugin's settings in the Homebridge UI, or add this to `config.json`:
+
+```json
+{
+  "platform": "MertikWifi",
+  "name": "Mertik WiFi",
+  "fireplaces": [
+    { "name": "Living Room Fire", "ip": "192.168.1.101" }
+  ]
+}
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `name` | – (required) | Accessory name in HomeKit. |
+| `ip` | – (required) | Fixed IP address (or host name) of the WiFi module. |
+| `port` | `2000` | TCP port of the module. |
+| `tileType` | `heater` | `heater`: on/off, flame as "fan speed", room temperature. `fan`: on/off and flame only. Never a light bulb, so "turn off all the lights" cannot touch the fire. |
+| `zeroPercent` | `off` | What setting the flame to 0 % does: `off` (switch off) or `pilot` (standby: main burner out, pilot stays lit). |
+| `igniteLevel` | `last` | Flame after switching on: `last` (the last level used, from HomeKit or the handset), `full`, or a percentage `1`–`100`. |
+| `auxSwitch` | `true` | Show a switch for the second burner row. |
+| `restoreFlameAfterAux` | `true` | Put the flame back after an aux change (the fireplace resets it to full). |
+| `alertSensor` | `contact` | Shutdown alert: `none`, `contact` (opens on alert) or `leak` (leak detected on alert). |
+| `shutOffAfterConnectionLoss` | `false` | When contact returns after a loss of at least `connectionLossMinutes`, switch the fire off. |
+| `connectionLossMinutes` | `5` | See above. |
+| `pollInterval` | `15` | Seconds between status checks when idle (5–60). While a command is checked, the plugin polls every 2 s. |
+| `commandRetries` | `3` | How many times an unconfirmed off is resent before the alert trips (0–5). |
+| `debug` | `false` | Log every packet and status frame. |
+
+Invalid entries are reported in the log and skipped; the plugin does not crash on bad config.
+
+## How it behaves in HomeKit
+
+| You do | The plugin |
+|---|---|
+| Switch on while off | Ignites (≈ 40 s), then sets `igniteLevel`. The tile shows on immediately; "Heating" once the burner is lit. |
+| Switch on from pilot | Relights the main burner with a flame command (no ignition needed, ≈ 6 s). |
+| Switch off | Sends off at once, retries until confirmed, raises the alert if it cannot be confirmed. |
+| Set flame 1–100 % while off | Ignites first, then sets the flame. |
+| Set flame 0 % | Off, or pilot only (`zeroPercent`). |
+| Toggle Aux | Switches the back burner row, then restores your flame level. |
+| Use the handset | HomeKit follows within a few seconds and the log says "Changed on handset: …". |
+| Switch on within 30 s of switching off | Refused, with a log line saying when to try again (a safety wait between off and re-ignition). |
+
+When the fireplace cannot be reached the tile shows **No Response**. The plugin keeps reconnecting in the
+background.
+
+## Troubleshooting
+
+- **"Unreachable" or No Response.** Check that the module still has the IP address in your config (DHCP
+  reservation), that it is powered, and that you can reach it from the Homebridge machine
+  (`nc -vz <ip> 2000`). A brief outage is normal; the plugin reconnects by itself.
+- **"Ignite refused …".** The plugin waits 30 s between switching off and igniting again.
+- **"Ignition failed … reports the fire is off".** The fireplace ran its ignition sequence but the pilot did not
+  stay lit. The plugin does not retry automatically. Check the gas supply and try the handset.
+- **"Off NOT confirmed".** The fireplace did not confirm the off after all retries. Check the fire and use the
+  handset. The alert sensor clears itself as soon as the fire is confirmed off.
+- **Something else.** Turn on `debug` for the fireplace, reproduce the problem and open an issue with the log.
+
+## Migrating from homebridge-mertik-fireplace
+
+The two plugins create different accessories, so HomeKit scenes and automations need to be set up again.
+
+1. Disable `homebridge-mertik-fireplace` (or remove its config entry) so only one plugin talks to the fireplace.
+2. Install this plugin and add your fireplace.
+3. Rebuild your scenes and automations with the new accessory.
+
+## Protocol notes
+
+The module listens on TCP port 2000 and speaks a plain-text protocol: `STX` + ASCII + `ETX`. Commands are the
+prefix `3030303080` plus a short code (`03` status, `1A` ignite, `10` off, `16xx` flame height, `2001`/`2000` aux).
+The status reply is a 106-character hex string with the flame height, a flags word (shutting down, pilot,
+igniting, aux), the mode, room and target temperature, and the device name.
+
+Things this plugin relies on, all measured on a real fireplace:
+
+- Acknowledgements are unreliable, so success is always read from status.
+- The reported flame height differs slightly from what was sent; compare with a tolerance.
+- Turning the flame down reads full (`FF`) for a few seconds before the new value.
+- After a turn-down the pilot ("guard flame") bit can read 0 for 20–30 s while the fire is clearly lit, so
+  "off" is never derived from that bit alone.
+- Values below `80` are reachable only going down and look the same as `80`; 1–100 % therefore maps to `80`–`FF`.
+- Changing aux, from WiFi or the handset, resets the flame to full.
+
+The full specification, with captured frames, is in [docs/DESIGN.md](docs/DESIGN.md).
+
+## Development
+
+```sh
+npm install
+npm run lint
+npm run build
+npm test        # protocol tests on captured frames + controller tests against a simulated fireplace
+```
+
+`test/fake-fireplace.ts` is an in-process TCP server that reproduces the measured behaviour of the module
+(split TCP reads, dropped replies, transient readings, guard-bit glitch, handset pushes, failed ignitions).
+
+## Credits
+
+Protocol knowledge builds on [tritter/homebridge-mertik-fireplace](https://github.com/tritter/homebridge-mertik-fireplace)
+and [erdebee/homey-mertik-wifi](https://github.com/erdebee/homey-mertik-wifi). Thank you to both authors: their
+work made this possible. This is a new implementation; no code is shared.
+
+What this plugin does differently from homebridge-mertik-fireplace:
+
+- Reads the actual flame height and aux state from the fireplace and shows them in HomeKit.
+- Uses the full flame range (any value from `80` to `FF`) instead of a fixed set of steps.
+- Verifies every command from status and retries it if it did not take effect.
+- Sends off immediately, ahead of anything else, instead of after a debounce delay.
+- Does not treat a dropped pilot-flame bit after a turn-down as "off".
+- The alert sensor trips only on a confirmed shutdown failure.
+- Switching the fire off after a connection loss is optional and off by default.
+- homebridge-mertik-fireplace supports thermostat and eco control, which this plugin does not have yet.
+
+## Disclaimer
+
+Not affiliated with, endorsed by or supported by Maxitrol. "Mertik" and "Maxitrol" are trademarks of their
+respective owners. Use at your own risk.
+
+## Licence
+
+[Apache-2.0](LICENSE)

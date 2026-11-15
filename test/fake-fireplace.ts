@@ -237,9 +237,39 @@ export class FakeFireplace {
     if (command === 'B0') {
       this.mode = '0000';
     } else if (command === 'B201') {
-      this.mode = '1002';
+      if (this.guard && !this.shuttingDown) {
+        this.mode = '1002';
+        this.thermostatTick();
+      }
+    } else if (command.startsWith('B2FD') && command.length === 8) {
+      this.target = parseInt(command.substring(4), 16);
+      this.thermostatTick();
     } else if (command === 'B301') {
-      this.mode = '2000';
+      if (this.guard && !this.shuttingDown) {
+        this.mode = '2000';
+        if (this.lit) {
+          this.after(this.t.relightMs, () => {
+            this.height = 0xbc;
+          });
+        }
+      }
+    }
+  }
+
+  /** Thermostat mode: light the burner while the room is below the target, idle at pilot above it (seen 15 Nov). */
+  thermostatTick(push = false): void {
+    if (this.mode !== '1002' || !this.guard || this.shuttingDown) {
+      return;
+    }
+    const wantLit = this.room < this.target;
+    if (wantLit && !this.lit) {
+      this.after(this.t.relightMs, () => {
+        this.height = 0xff;
+      }, push);
+    } else if (!wantLit && this.lit) {
+      this.after(this.t.relightMs, () => {
+        this.height = 0;
+      }, push);
     }
   }
 
@@ -288,6 +318,7 @@ export class FakeFireplace {
         this.after(this.t.offGuardMs, () => {
           this.guard = false;
           this.shuttingDown = false;
+          this.mode = '0000';
         }, push);
       }, push);
     }, push);

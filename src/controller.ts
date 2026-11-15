@@ -46,6 +46,7 @@ export interface ControllerTiming {
   transientRecheckMs: number;
   unknownStateWaitMs: number;
   leftOnCheckMs: number;
+  modeTimeoutMs: number;
 }
 
 export const DEFAULT_CONTROLLER_TIMING: ControllerTiming = {
@@ -67,6 +68,7 @@ export const DEFAULT_CONTROLLER_TIMING: ControllerTiming = {
   transientRecheckMs: 3_000,
   unknownStateWaitMs: 10_000,
   leftOnCheckMs: 30_000,
+  modeTimeoutMs: 10_000,
 };
 
 type Command =
@@ -74,7 +76,8 @@ type Command =
   | { kind: 'on'; flameByte?: number; explicitFlame: boolean }
   | { kind: 'flame'; flameByte: number }
   | { kind: 'aux'; on: boolean }
-  | { kind: 'standby' };
+  | { kind: 'standby' }
+  | { kind: 'mode'; mode: FireMode; target?: number };
 
 interface QueueItem {
   command: Command;
@@ -106,6 +109,8 @@ export interface FireplaceView {
   flamePercent: number;
   aux: boolean;
   mode: FireMode;
+  /** Thermostat target (°C), as stored in the fireplace or as just requested. */
+  targetTemperature?: number;
   roomTemperature?: number;
   busy: boolean;
   /** Off could not be confirmed. Cleared when the fire is confirmed off. */
@@ -118,6 +123,15 @@ type Category = 'off' | 'pilot' | 'igniting' | 'on';
 
 function category(state: FireState): Category {
   return state === 'shuttingDown' ? 'off' : state;
+}
+
+/** Thermostat range the plugin offers: 5–36 °C in 0.5 °C steps. */
+export const TARGET_MIN = 5;
+export const TARGET_MAX = 36;
+
+export function clampTarget(celsius: number): number {
+  const c = Number.isFinite(celsius) ? celsius : 20;
+  return Math.min(TARGET_MAX, Math.max(TARGET_MIN, Math.round(c * 2) / 2));
 }
 
 function formatDuration(ms: number): string {
@@ -156,7 +170,10 @@ export class FireplaceController extends EventEmitter {
   private pumping = false;
   private readonly waiters = new Set<Waiter>();
 
-  private desired: { power?: DisplayPower; flameByte?: number; aux?: boolean } = {};
+  private desired: { power?: DisplayPower; flameByte?: number; aux?: boolean; mode?: FireMode; target?: number } = {};
+  private targetTimer?: NodeJS.Timeout;
+  private pendingTarget?: number;
+  private targetResolvers: Array<(ok: boolean) => void> = [];
   private debounceTimer?: NodeJS.Timeout;
   private pendingFlameByte?: number;
   private debounceResolvers: Array<(ok: boolean) => void> = [];
@@ -233,7 +250,8 @@ export class FireplaceController extends EventEmitter {
       igniting,
       flamePercent: power === 'on' ? byteToPercent(flameByte) : 0,
       aux,
-      mode: s?.mode ?? 'manual',
+      mode: d.mode ?? s?.mode ?? 'manual',
+      targetTemperature: d.target ?? s?.targetTemperature,
       roomTemperature: s?.roomTemperature,
       busy: this.busy,
       alert: this.alert,
@@ -242,7 +260,7 @@ export class FireplaceController extends EventEmitter {
   }
 
   get busy(): boolean {
-    return this.pumping || this.queue.length > 0 || this.debounceTimer !== undefined;
+    return this.pumping || this.queue.length > 0 || this.debounceTimer !== undefined || this.targetTimer !== undefined;
   }
 
   get lastStatus(): FireplaceStatus | undefined {
@@ -253,6 +271,11 @@ export class FireplaceController extends EventEmitter {
   requestOff(): Promise<boolean> {
     this.log.info('Off requested');
     this.cancelDebounce();
+    clearTimeout(this.targetTimer);
+    this.targetTimer = undefined;
+    for (const r of this.targetResolvers.splice(0)) {
+      r(false);
+    }
     for (const item of this.queue) {
       item.resolve(false);
     }
@@ -278,7 +301,9 @@ export class FireplaceController extends EventEmitter {
     // that must not ignite again or reset the flame to the ignite level.
     const state = this.status?.state;
     const offPending = this.findItem('off') !== undefined;
-    if (!offPending && (this.desired.power === 'on' || state === 'on' || state === 'igniting')) {
+    // Thermostat/eco waiting at pilot is "on" too: switching on must not knock it back to manual.
+    const autoWaiting = state === 'pilot' && this.status?.mode !== 'manual';
+    if (!offPending && (this.desired.power === 'on' || state === 'on' || state === 'igniting' || autoWaiting)) {
       return Promise.resolve(true);
     }
     const flameByte = this.igniteTargetByte();
@@ -288,9 +313,51 @@ export class FireplaceController extends EventEmitter {
     return promise;
   }
 
-  /** Set the flame (byte 0x80–0xFF). Debounced; ignites first if the fire is off. */
+  /** Thermostat mode with this target (°C). Debounced like the slider; ignites first if the fire is off. */
+  requestThermostat(target: number): Promise<boolean> {
+    const t = clampTarget(target);
+    this.desired = { ...this.desired, mode: 'thermostat', target: t };
+    if (this.status?.state === 'off' || this.status?.state === 'shuttingDown') {
+      this.desired.power = 'on';
+    }
+    this.pendingTarget = t;
+    clearTimeout(this.targetTimer);
+    const promise = new Promise<boolean>((resolve) => this.targetResolvers.push(resolve));
+    this.targetTimer = setTimeout(() => this.guard('thermostat', () => {
+      this.targetTimer = undefined;
+      const resolvers = this.targetResolvers.splice(0);
+      this.removeQueued((c) => c.kind === 'mode' || c.kind === 'flame' || c.kind === 'standby');
+      void this.enqueue({ kind: 'mode', mode: 'thermostat', target: this.pendingTarget }).then((ok) => resolvers.forEach((r) => r(ok)));
+    }), this.timing.sliderDebounceMs);
+    this.emitUpdate();
+    return promise;
+  }
+
+  /** Eco mode (the fireplace modulates the flame itself). Ignites first if the fire is off. */
+  requestEco(): Promise<boolean> {
+    this.removeQueued((c) => c.kind === 'mode');
+    this.desired = { ...this.desired, mode: 'eco' };
+    if (this.status?.state === 'off' || this.status?.state === 'shuttingDown') {
+      this.desired.power = 'on';
+    }
+    const promise = this.enqueue({ kind: 'mode', mode: 'eco' });
+    this.emitUpdate();
+    return promise;
+  }
+
+  /** Back to manual mode, keeping the fire as it is. */
+  requestManual(): Promise<boolean> {
+    this.removeQueued((c) => c.kind === 'mode');
+    this.desired = { ...this.desired, mode: 'manual' };
+    const promise = this.enqueue({ kind: 'mode', mode: 'manual' });
+    this.emitUpdate();
+    return promise;
+  }
+
+  /** Set the flame (byte 0x80–0xFF). Debounced; ignites first if the fire is off. Returns to manual mode. */
   requestFlame(flameByte: number): Promise<boolean> {
-    this.desired = { ...this.desired, power: 'on', flameByte };
+    this.removeQueued((c) => c.kind === 'mode');
+    this.desired = { ...this.desired, power: 'on', flameByte, mode: 'manual' };
     this.pendingFlameByte = flameByte;
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
@@ -322,6 +389,10 @@ export class FireplaceController extends EventEmitter {
   stop(): void {
     this.stopped = true;
     clearInterval(this.leftOnTimer);
+    clearTimeout(this.targetTimer);
+    for (const r of this.targetResolvers.splice(0)) {
+      r(false);
+    }
     for (const t of this.timers) {
       clearTimeout(t);
     }
@@ -394,8 +465,9 @@ export class FireplaceController extends EventEmitter {
     this.emitUpdate();
   }
 
+  /** "On" time for the left-on alert: from the fire being lit until it is switched off (pilot/thermostat idle count). */
   private trackLitTime(s: FireplaceStatus, now: number): void {
-    if (s.state === 'on') {
+    if (s.state === 'on' || s.state === 'pilot') {
       if (this.litSince === undefined) {
         this.litSince = now;
       }
@@ -408,7 +480,7 @@ export class FireplaceController extends EventEmitter {
     this.litSince = undefined;
     if (this.leftOnAlert) {
       this.leftOnAlert = false;
-      this.log.info('Main burner is out – left-on alert cleared');
+      this.log.info('Fire is off – left-on alert cleared');
     }
   }
 
@@ -418,7 +490,7 @@ export class FireplaceController extends EventEmitter {
       return;
     }
     this.leftOnAlert = true;
-    this.log.warn(`The fire has been lit for ${formatDuration(Date.now() - this.litSince)} – left-on alert raised`);
+    this.log.warn(`The fire has been on for ${formatDuration(Date.now() - this.litSince)} – left-on alert raised`);
     this.emit('leftOn');
     if (this.options.leftOnSwitchOff) {
       this.log.warn('Switching the fire off (left-on auto-off is enabled)');
@@ -447,7 +519,11 @@ export class FireplaceController extends EventEmitter {
   private reportHandsetChange(prev: FireplaceStatus, prevDisplay: number, s: FireplaceStatus): void {
     const before = category(prev.state);
     const after = category(s.state);
-    if (before !== after) {
+    const auto = s.mode !== 'manual' && prev.mode === s.mode;
+    if (auto && before !== after && (before === 'on' || before === 'pilot') && (after === 'on' || after === 'pilot')) {
+      // The thermostat lighting / idling the burner by itself is not a handset change.
+      this.log.info(after === 'on' ? 'Thermostat: heating' : 'Thermostat: room is warm enough, burner off (pilot on)');
+    } else if (before !== after) {
       let what: string | undefined;
       switch (after) {
       case 'on':
@@ -467,7 +543,14 @@ export class FireplaceController extends EventEmitter {
       }
     } else if (after === 'on' && this.ffSince === undefined && !flameMatches(this.displayHeight, prevDisplay) &&
       !(prev.auxOn !== s.auxOn && s.flameHeight === FLAME_MAX)) {
-      this.log.info(`Changed on handset: flame ${byteToPercent(this.displayHeight)} %`);
+      if (auto) {
+        this.log.debug(`${s.mode}: flame ${byteToPercent(this.displayHeight)} %`);
+      } else {
+        this.log.info(`Changed on handset: flame ${byteToPercent(this.displayHeight)} %`);
+      }
+    }
+    if (prev.mode === 'thermostat' && s.mode === 'thermostat' && Math.abs(prev.targetTemperature - s.targetTemperature) >= 0.1) {
+      this.log.info(`Changed on handset: thermostat ${s.targetTemperature.toFixed(1)} °C`);
     }
     if (prev.auxOn !== s.auxOn) {
       this.log.info(`Changed on handset: aux ${s.auxOn ? 'on' : 'off'}`);
@@ -618,7 +701,7 @@ export class FireplaceController extends EventEmitter {
     } finally {
       this.pumping = false;
       this.link.setFastPolling(false);
-      if (!this.debounceTimer) {
+      if (!this.debounceTimer && !this.targetTimer) {
         this.desired = {};
       }
       this.emitUpdate();
@@ -637,6 +720,8 @@ export class FireplaceController extends EventEmitter {
       return this.execAux(command.on, token);
     case 'standby':
       return this.execStandby(token);
+    case 'mode':
+      return this.execMode(command, token);
     }
   }
 
@@ -877,7 +962,15 @@ export class FireplaceController extends EventEmitter {
       this.log.info('Standby requested but the fire is already off');
       return true;
     }
-    if (s.state === 'pilot') {
+    if (s.mode !== 'manual') {
+      this.log.info(`Switching from ${s.mode} mode to manual`);
+      await this.link.send(cmd.manualMode(), 'manual mode');
+      await this.waitFor(() => false, this.timing.modeSettleMs);
+      if (token.aborted) {
+        return false;
+      }
+    }
+    if (this.status?.state === 'pilot') {
       return true;
     }
     for (let attempt = 0; attempt < 2 && !token.aborted; attempt++) {
@@ -896,6 +989,57 @@ export class FireplaceController extends EventEmitter {
     }
     if (!token.aborted) {
       this.log.error('Standby not confirmed');
+    }
+    return false;
+  }
+
+  private async execMode(command: Extract<Command, { kind: 'mode' }>, token: Token): Promise<boolean> {
+    const want = command.mode;
+    if (!this.status) {
+      this.log.warn(`${want} mode not set: the fireplace is unreachable`);
+      return false;
+    }
+    const isOff = (st: FireplaceStatus) => st.state === 'off' || st.state === 'shuttingDown';
+    if (isOff(this.status)) {
+      if (want === 'manual') {
+        return true;
+      }
+      // Thermostat and eco only work with the fire lit: light it first (manual), then switch mode.
+      const lit = await this.execOn({ kind: 'on', explicitFlame: false }, token);
+      if (!lit || token.aborted || !this.status || isOff(this.status)) {
+        return false;
+      }
+    }
+    const target = command.target !== undefined ? clampTarget(command.target) : undefined;
+    const label = want === 'thermostat' && target !== undefined ? `Thermostat ${target.toFixed(1)} °C` : `${want[0].toUpperCase()}${want.slice(1)} mode`;
+    const matches = (st: FireplaceStatus) => st.mode === want &&
+      (target === undefined || Math.abs(st.targetTemperature - target) < 0.05);
+    for (let attempt = 0; attempt < 2 && !token.aborted; attempt++) {
+      if (attempt > 0) {
+        this.log.warn(`${label} not confirmed, resending`);
+      }
+      if (want === 'thermostat') {
+        if (this.status?.mode !== 'thermostat' || attempt > 0) {
+          await this.link.send(cmd.thermostatMode(), 'thermostat mode');
+        }
+        if (target !== undefined) {
+          await this.link.send(cmd.setTargetTemperature(target), `target ${target}`);
+        }
+      } else {
+        await this.link.send(want === 'eco' ? cmd.ecoMode() : cmd.manualMode(), `${want} mode`);
+      }
+      const ok = (this.status !== undefined && attempt === 0 && matches(this.status) && want !== 'thermostat') ||
+        await this.waitFor(matches, this.timing.modeTimeoutMs);
+      if (token.aborted) {
+        return false;
+      }
+      if (ok) {
+        this.log.info(label);
+        return true;
+      }
+    }
+    if (!token.aborted) {
+      this.log.error(`${label} not confirmed (fireplace reports ${this.status?.mode} mode)`);
     }
     return false;
   }

@@ -29,6 +29,8 @@ export interface FireplaceConfig {
   leftOnAlertHours: number;
   leftOnSwitchOff: boolean;
   childLockSwitch: boolean;
+  thermostatControl: boolean;
+  ecoSwitch: boolean;
   debug: boolean;
 }
 
@@ -48,6 +50,8 @@ export const CONFIG_DEFAULTS = {
   leftOnAlertHours: 4,
   leftOnSwitchOff: false,
   childLockSwitch: true,
+  thermostatControl: true,
+  ecoSwitch: true,
   debug: false,
 };
 
@@ -159,6 +163,8 @@ export function validateFireplace(raw: unknown): ValidationResult {
     leftOnAlertHours: raw.leftOnAlertHours === 0 || raw.leftOnAlertHours === '0' ? 0 : num('leftOnAlertHours', CONFIG_DEFAULTS.leftOnAlertHours, 0, 24),
     leftOnSwitchOff: bool('leftOnSwitchOff', CONFIG_DEFAULTS.leftOnSwitchOff),
     childLockSwitch: bool('childLockSwitch', CONFIG_DEFAULTS.childLockSwitch),
+    thermostatControl: bool('thermostatControl', CONFIG_DEFAULTS.thermostatControl),
+    ecoSwitch: bool('ecoSwitch', CONFIG_DEFAULTS.ecoSwitch),
     debug: bool('debug', CONFIG_DEFAULTS.debug),
   };
 

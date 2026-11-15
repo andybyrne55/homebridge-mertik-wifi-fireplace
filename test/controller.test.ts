@@ -37,6 +37,7 @@ const FAST_CTRL: Partial<ControllerTiming> = {
   transientRecheckMs: 150,
   unknownStateWaitMs: 500,
   leftOnCheckMs: 50,
+  modeTimeoutMs: 500,
 };
 
 const DEFAULT_OPTIONS: ControllerOptions = {
@@ -506,6 +507,17 @@ describe('left-on alert', () => {
     assert.ok(has(logs, 'left-on alert cleared'));
   });
 
+  it('counts thermostat idle (pilot) as on', async () => {
+    const { ctrl, fake } = await setup((f) => {
+      f.setOn(0xff);
+      f.room = 250;
+    }, { leftOnAlertMs: 900 });
+    assert.equal(await ctrl.requestThermostat(20), true);
+    await waitUntil(() => ctrl.lastStatus?.state === 'pilot', 2_000, 'thermostat idle');
+    await waitUntil(() => ctrl.view.leftOnAlert, 2_000, 'alert while idling at pilot');
+    assert.equal(fake.count('10'), 0);
+  });
+
   it('flame changes do not restart the clock; a turn-off does', async () => {
     const { ctrl } = await setup((f) => f.setOn(0xc0), { leftOnAlertMs: 900 });
     await sleep(500);
@@ -524,5 +536,83 @@ describe('left-on alert', () => {
     const { ctrl } = await setup((f) => f.setOn(0xc0), { leftOnAlertMs: 0 });
     await sleep(500);
     assert.equal(ctrl.view.leftOnAlert, false);
+  });
+});
+
+describe('thermostat and eco', () => {
+  it('thermostat from off: ignites, then thermostat mode with the target', async () => {
+    const { ctrl, fake, logs } = await setup();
+    assert.equal(await ctrl.requestThermostat(25), true);
+    assert.equal(fake.count('1A'), 1);
+    assert.equal(ctrl.lastStatus?.mode, 'thermostat');
+    assert.equal(ctrl.lastStatus?.targetTemperature, 25);
+    assert.ok(has(logs, 'Thermostat 25.0 °C'));
+    assert.equal(ctrl.view.mode, 'thermostat');
+  });
+
+  it('room warmer than the target: idles at pilot, reported as thermostat, not as a handset change', async () => {
+    const { ctrl, logs } = await setup((f) => f.setOn(0xff));
+    assert.equal(await ctrl.requestThermostat(15), true);
+    await waitUntil(() => ctrl.lastStatus?.state === 'pilot', 2_000, 'idle');
+    assert.equal(ctrl.view.power, 'pilot');
+    assert.equal(ctrl.view.mode, 'thermostat');
+    assert.ok(has(logs, 'Thermostat: room is warm enough'));
+    assert.ok(!has(logs, 'Changed on handset: pilot only'));
+  });
+
+  it('raising the target relights by itself; switching on while idle does not leave thermostat mode', async () => {
+    const { ctrl, fake, logs } = await setup((f) => f.setOn(0xff));
+    assert.equal(await ctrl.requestThermostat(15), true);
+    await waitUntil(() => ctrl.lastStatus?.state === 'pilot', 2_000, 'idle');
+    assert.equal(await ctrl.requestOn(), true);
+    assert.equal(fake.count('16'), 0, 'no flame command');
+    assert.equal(await ctrl.requestThermostat(24), true);
+    await waitUntil(() => ctrl.lastStatus?.state === 'on', 2_000, 'heating again');
+    assert.equal(fake.count('B201'), 1, 'thermostat mode sent once');
+    assert.ok(has(logs, 'Thermostat: heating'));
+  });
+
+  it('slider drags on the target are coalesced', async () => {
+    const { ctrl, fake } = await setup((f) => f.setOn(0xff));
+    const results = [20, 21, 22, 23].map((t) => ctrl.requestThermostat(t));
+    assert.equal(ctrl.view.targetTemperature, 23);
+    assert.deepEqual(await Promise.all(results), [true, true, true, true]);
+    assert.equal(fake.received.filter((c) => c.startsWith('B2FD')).length, 1);
+  });
+
+  it('eco on, then a flame change returns to manual first', async () => {
+    const { ctrl, fake, logs } = await setup((f) => f.setOn(0xff));
+    assert.equal(await ctrl.requestEco(), true);
+    assert.equal(ctrl.lastStatus?.mode, 'eco');
+    assert.ok(has(logs, 'Eco mode'));
+    assert.equal(await ctrl.requestFlame(0xa0), true);
+    const b0 = fake.received.lastIndexOf('B0');
+    const flame = fake.received.findIndex((c) => c.startsWith('16'));
+    assert.ok(b0 !== -1 && b0 < flame);
+    assert.equal(ctrl.lastStatus?.mode, 'manual');
+  });
+
+  it('eco switch off returns to manual and keeps the fire lit', async () => {
+    const { ctrl } = await setup((f) => f.setOn(0xff));
+    assert.equal(await ctrl.requestEco(), true);
+    assert.equal(await ctrl.requestManual(), true);
+    assert.equal(ctrl.lastStatus?.mode, 'manual');
+    assert.equal(ctrl.lastStatus?.state, 'on');
+  });
+
+  it('off from thermostat mode is verified as usual', async () => {
+    const { ctrl } = await setup((f) => f.setOn(0xff));
+    assert.equal(await ctrl.requestThermostat(25), true);
+    assert.equal(await ctrl.requestOff(), true);
+    await waitUntil(() => ctrl.lastStatus?.state === 'off', 2_000, 'off');
+    assert.equal(ctrl.view.mode, 'manual');
+  });
+
+  it('target is clamped to 5–36 °C in 0.5 steps', async () => {
+    const { ctrl } = await setup((f) => f.setOn(0xff));
+    assert.equal(await ctrl.requestThermostat(40.2), true);
+    assert.equal(ctrl.lastStatus?.targetTemperature, 36);
+    assert.equal(await ctrl.requestThermostat(21.3), true);
+    assert.equal(ctrl.lastStatus?.targetTemperature, 21.5);
   });
 });

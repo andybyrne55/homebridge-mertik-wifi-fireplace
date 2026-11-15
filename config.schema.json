@@ -92,6 +92,12 @@
               "pattern": "^(last|full|[1-9][0-9]?|100)$",
               "description": "\"last\" = the last flame level used, \"full\" = 100 %, or a percentage from 1 to 100."
             },
+            "thermostatControl": {
+              "title": "Thermostat control",
+              "type": "boolean",
+              "default": true,
+              "description": "Heater tile only: setting the target temperature puts the fire in thermostat mode (it holds the room at that temperature); moving the flame slider returns to manual."
+            },
             "auxSwitch": {
               "title": "Show the aux (second burner) switch",
               "type": "boolean",
@@ -102,6 +108,12 @@
               "type": "boolean",
               "default": true,
               "description": "When the lock is on, HomeKit and automations cannot light the fire or change it. Switching off always works. The handset is not affected."
+            },
+            "ecoSwitch": {
+              "title": "Show the eco switch",
+              "type": "boolean",
+              "default": true,
+              "description": "Eco mode: the fireplace sets the flame itself to save gas. Any flame change returns to manual."
             },
             "restoreFlameAfterAux": {
               "title": "Restore the flame level after an aux change",
@@ -217,8 +229,10 @@
             "fireplaces[].tileType",
             "fireplaces[].zeroPercent",
             "fireplaces[].igniteLevel",
+            "fireplaces[].thermostatControl",
             "fireplaces[].auxSwitch",
             "fireplaces[].childLockSwitch",
+            "fireplaces[].ecoSwitch",
             "fireplaces[].restoreFlameAfterAux",
             "fireplaces[].alertSensor",
             "fireplaces[].leftOnAlertHours",

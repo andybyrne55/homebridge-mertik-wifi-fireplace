@@ -104,6 +104,13 @@ Observed flag values: `820A` off (aux on), `821A` igniting, `828A` on + aux on, 
     until a flame command (relit in ~9 s). A second re-ignite ~60 s after an off: igniting for ~40 s (top flag bit
     cleared after 30 s, flags `021A`), then off with no pilot – a real failed ignition. Handle: never treat
     "igniting ended" as failure; wait for pilot/on until the timeout; from pilot, send a flame command.
+16. (15 Nov 18:26–18:31, cold start) Thermostat: `B201` then `B2FD`+target → mode `1002`, flame `FF` while the room is
+    below the target. Target below the room → pilot only (height `00`, guard on) within ~8 s, and the mode field STAYS
+    `1002`. Raising the target again (`B2FD` only, no `B201`) relit the burner in ~9 s. So thermostat idle = mode `1002`
+    + pilot; it is distinguishable from manual standby (mode `0000` + pilot). Eco (`B301`) → mode `2000`, the unit set
+    the flame to `BC`/`BB` and held it for 60 s. A flame command after `B0` returned to manual. Mode commands DO return
+    acks on this unit (`B20100DC00C5`-style: mode, target, room; eco `B386…`), but success is still read from status.
+    After an off the mode reads `0000`.
 15. (15 Nov) The reported flame height settles a few counts below what was sent (D9 → D5 → D2 if you keep
     re-sending the reported value). Remember the level that was asked for, not the reported one.
 
@@ -238,8 +245,7 @@ Debug (config `debug`): raw frames, queue activity, state transitions.
 
 ## 11. Open questions / v2
 
-- Thermostat idle vs manual standby are indistinguishable in status (mode `0000`, height `00`). Resolve before
-  thermostat control.
+- ~~Thermostat idle vs manual standby are indistinguishable~~ Resolved 15 Nov (behaviour 16): idle keeps mode `1002`.
 - ~~Does the unit enforce a wait between off and re-ignite?~~ Effectively yes (15 Nov): re-ignite ~45 s after an
   off stopped at pilot, ~60 s failed, 3 min and from cold lit cleanly (30–35 s). Default lockout is now 180 s,
   configurable as `reigniteWait` (30–900 s). The exact threshold between 60 s and 3 min is unknown.
@@ -252,8 +258,10 @@ Debug (config `debug`): raw frames, queue activity, state transitions.
   - Child lock: a switch; while on, HomeKit/automations cannot ignite, change flame or aux; off (and 0 %) always
     allowed. Software only – the fireplace has no lock in its protocol. State persisted in the accessory context. Built.
   - Thermostat: setting the target temperature (HeatingThresholdTemperature) puts the fire in thermostat mode;
-    moving the flame slider returns to manual. Last touched wins. Needs the idle-vs-pilot question resolved first.
-  - Eco: an Eco switch; any flame change returns to manual.
+    moving the flame slider returns to manual. Last touched wins. Target 5–36 °C in 0.5 steps. Built.
+  - Eco: an Eco switch; any flame change returns to manual. Built.
+  - Left-on time counts from lit until off (thermostat idle at pilot counts as on), so thermostat cycling does not
+    restart the clock.
 - v2 (original note): "left on too long" alert (owner's request, 15 Nov). A configurable time (e.g. `onAlertHours`, off by default)
   after which the plugin raises an alert if the main burner has been lit continuously, in case something
   malfunctions or it was forgotten. To decide: its own sensor or shared with the shutdown alert (keep the two

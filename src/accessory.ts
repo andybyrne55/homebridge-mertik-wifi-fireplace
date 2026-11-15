@@ -8,7 +8,7 @@ import type { Characteristic, CharacteristicValue, PlatformAccessory, Service, W
 
 import type { FireplaceConfig } from './config.js';
 import { Connection } from './connection.js';
-import { FireplaceController, type FireplaceView } from './controller.js';
+import { clampTarget, FireplaceController, TARGET_MAX, TARGET_MIN, type FireplaceView } from './controller.js';
 import { FireplaceLogger, type LogSink } from './logger.js';
 import type { MertikWifiFireplacePlatform } from './platform.js';
 import { percentToByte } from './protocol/flame.js';
@@ -24,6 +24,7 @@ export class FireplaceAccessory {
   private readonly alertService?: Service;
   private readonly leftOnService?: Service;
   private readonly lockService?: Service;
+  private readonly ecoService?: Service;
   private lastReachable?: boolean;
 
   constructor(
@@ -93,6 +94,20 @@ export class FireplaceAccessory {
         .onSet(() => undefined);
       this.main.getCharacteristic(C.CurrentTemperature)
         .onGet(() => this.read((v) => this.temperature(v)));
+      if (config.thermostatControl) {
+        // Setting a target temperature puts the fire in thermostat mode; moving the flame slider returns to manual.
+        // Value first, then limits: the HAP default (0) is below the 5 °C minimum and would log a warning.
+        this.main.getCharacteristic(C.HeatingThresholdTemperature).updateValue(clampTarget(20));
+        this.main.getCharacteristic(C.HeatingThresholdTemperature)
+          .setProps({ minValue: TARGET_MIN, maxValue: TARGET_MAX, minStep: 0.5 })
+          .onGet(() => this.read((v) => clampTarget(v.targetTemperature ?? 20)))
+          .onSet((value) => this.write('HeatingThresholdTemperature', () => {
+            this.checkLock(true, 'changing the thermostat');
+            void this.controller.requestThermostat(Number(value));
+          }));
+      } else if (this.main.testCharacteristic(C.HeatingThresholdTemperature)) {
+        this.main.removeCharacteristic(this.main.getCharacteristic(C.HeatingThresholdTemperature));
+      }
     }
 
     // ---- aux switch
@@ -114,6 +129,15 @@ export class FireplaceAccessory {
       .onGet(() => (this.controller.view.alert ? C.ContactSensorState.CONTACT_NOT_DETECTED : C.ContactSensorState.CONTACT_DETECTED));
     leak?.getCharacteristic(C.LeakDetected)
       .onGet(() => (this.controller.view.alert ? C.LeakDetected.LEAK_DETECTED : C.LeakDetected.LEAK_NOT_DETECTED));
+
+    // ---- eco switch
+    this.ecoService = this.optionalService(S.Switch, 'eco', config.ecoSwitch, `${config.name} Eco`);
+    this.ecoService?.getCharacteristic(C.On)
+      .onGet(() => this.read((v) => v.mode === 'eco'))
+      .onSet((value) => this.write('Eco', () => {
+        this.checkLock(true, 'changing eco mode');
+        void (value === true ? this.controller.requestEco() : this.controller.requestManual());
+      }));
 
     // ---- left-on alert sensor (same sensor type as the shutdown alert)
     const wantLeftOn = config.leftOnAlertHours > 0;
@@ -247,6 +271,12 @@ export class FireplaceAccessory {
       }
       if (this.lockService) {
         this.set(this.lockService, C.On, this.locked, recovered);
+      }
+      if (this.ecoService) {
+        this.set(this.ecoService, C.On, view.mode === 'eco', recovered);
+      }
+      if (this.config.tileType === 'heater' && this.config.thermostatControl && view.targetTemperature !== undefined) {
+        this.set(this.main, C.HeatingThresholdTemperature, clampTarget(view.targetTemperature), recovered);
       }
     } catch (err) {
       this.log.error(`Internal error updating HomeKit: ${String(err)}`);

@@ -5,9 +5,11 @@ All notable changes to this project are documented here. This project uses [sema
 ## [Unreleased]
 
 ### Added
-- Left-on alert: a sensor that trips when the fire has been lit continuously for `leftOnAlertHours` (default 4),
+- Left-on alert: a sensor that trips when the fire has been on continuously for `leftOnAlertHours` (default 4),
   with optional auto-off (`leftOnSwitchOff`).
 - Child lock switch: blocks HomeKit from lighting or changing the fire; off always works.
+- Thermostat control: setting the target temperature on the heater tile switches to thermostat mode.
+- Eco mode switch.
 
 ## [0.1.0-beta.1]
 

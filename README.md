@@ -24,12 +24,13 @@ retried if it did not take effect. If the fire cannot be confirmed off, you get 
 - **Shutdown alert sensor** (contact or leak sensor) that trips **only** when the fire could not be confirmed off
   after all retries. It does not trip because the fireplace is merely unreachable while off, and it clears by
   itself once the fire is confirmed off.
-- **Left-on alert:** a second sensor that trips when the fire has been lit continuously for 4 hours (configurable),
+- **Left-on alert:** a second sensor that trips when the fire has been on continuously for 4 hours (configurable),
   in case it was forgotten or something is wrong. Optionally switches the fire off too.
 - **Child lock:** a switch that stops HomeKit and automations from lighting the fire or changing it. Switching off
   always works, and the handset is not affected.
-- **Thermostat and eco mode** set on the handset are recognised and logged. Controlling them is planned for a
-  later version.
+- **Thermostat:** set a target temperature on the Fire tile and the fireplace holds the room at it, lighting and idling
+  the burner by itself. Move the flame slider to go back to manual.
+- **Eco mode** switch: the fireplace sets the flame itself to save gas.
 - **Clear logs:** one line per event and its outcome ("Ignite requested", "Lit after 38 s", "Off confirmed after
   9 s", "Changed on handset: flame 60 %"). Packet-level logging is available with the `debug` option.
 - No runtime dependencies, no analytics, writes no files.
@@ -72,10 +73,12 @@ Use the plugin's settings in the Homebridge UI, or add this to `config.json`:
 | `tileType` | `heater` | `heater`: on/off, flame as "fan speed", room temperature. `fan`: on/off and flame only. Never a light bulb, so "turn off all the lights" cannot touch the fire. |
 | `zeroPercent` | `off` | What setting the flame to 0 % does: `off` (switch off) or `pilot` (standby: main burner out, pilot stays lit). |
 | `igniteLevel` | `last` | Flame after switching on: `last` (the last level used, from HomeKit or the handset), `full`, or a percentage `1`–`100`. |
+| `thermostatControl` | `true` | Heater tile: setting the target temperature switches to thermostat mode. |
+| `ecoSwitch` | `true` | Show the eco switch. |
 | `auxSwitch` | `true` | Show a switch for the second burner row. |
 | `restoreFlameAfterAux` | `true` | Put the flame back after an aux change (the fireplace resets it to full). |
 | `alertSensor` | `contact` | Shutdown alert: `none`, `contact` (opens on alert) or `leak` (leak detected on alert). |
-| `leftOnAlertHours` | `4` | Raise the left-on alert after the fire has been lit continuously this long (hours, 0 = off). Same sensor type as `alertSensor`. |
+| `leftOnAlertHours` | `4` | Raise the left-on alert after the fire has been on (lit or idling at pilot) continuously this long (hours, 0 = off). Same sensor type as `alertSensor`. |
 | `leftOnSwitchOff` | `false` | Also switch the fire off when the left-on alert is raised. |
 | `childLockSwitch` | `true` | Show the child lock switch. |
 | `shutOffAfterConnectionLoss` | `false` | When contact returns after a loss of at least `connectionLossMinutes`, switch the fire off. |
@@ -97,6 +100,9 @@ Invalid entries are reported in the log and skipped; the plugin does not crash o
 | Set flame 1–100 % while off | Ignites first, then sets the flame. |
 | Set flame 0 % | Off, or pilot only (`zeroPercent`). |
 | Toggle Aux | Switches the back burner row, then restores your flame level. |
+| Set the target temperature (heater tile) | Thermostat mode: lights the fire first if needed, then the fireplace heats until the room reaches the target and idles at pilot (tile shows on, not heating). |
+| Turn Eco on / off | Eco mode / back to manual, keeping the fire lit. |
+| Turn on the child lock | HomeKit and automations can no longer light the fire or change it; off still works. |
 | Use the handset | HomeKit follows within a few seconds and the log says "Changed on handset: …". |
 | Switch on within 3 minutes of switching off | Refused, with a log line saying when to try again. The fireplace does not light reliably sooner (`reigniteWait`). |
 

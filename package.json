@@ -2,7 +2,7 @@
   "name": "homebridge-mertik-wifi-fireplace",
   "displayName": "Mertik WiFi Fireplace",
   "type": "module",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Reliable HomeKit control for Mertik Maxitrol WiFi gas fireplaces: verified on/off, flame height, boost burner, thermostat, child lock, and shutdown-failure and left-on alerts.",
   "author": "Andrew Byrne",
   "license": "Apache-2.0",

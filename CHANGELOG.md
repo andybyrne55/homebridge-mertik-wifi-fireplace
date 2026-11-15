@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. This project uses [semantic versioning](https://semver.org).
 
+## [1.0.1]
+
+No functional changes.
+
+### Changed
+- Releases are now published from GitHub Actions with npm trusted publishing, so each version on npm carries
+  provenance linking it to the exact source commit and build.
+
 ## [1.0.0]
 
 First release.

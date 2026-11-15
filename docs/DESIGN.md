@@ -1,4 +1,4 @@
-# homebridge-mertik-wifi – design and build spec (v1)
+# homebridge-mertik-wifi-fireplace – design and build spec (v1)
 
 Self-contained hand-off document: everything needed to build v1 is here. All protocol facts below were
 measured on a real Mertik Maxitrol WiFi module (GV60 family, two-burner gas fire) on 14–15 Nov 2026 and,
@@ -17,8 +17,7 @@ v1 (manual control only):
 - alert when the fire cannot be confirmed off
 - recognises thermostat / eco mode (set from the handset) and reports it, but does not control it
 
-v2 backlog (do not build in v1): thermostat and eco control, child lock, anything needed for parity with
-the existing verified plugin, then a Homebridge "verified" application. See §11.
+v2 backlog (do not build in v1): thermostat and eco control, a "left on too long" alert, child lock, then a Homebridge "verified" application. See §11.
 
 ## 2. Standards (checked against homebridge-plugin-template @ 2026-11-01 and the verified criteria)
 
@@ -98,6 +97,22 @@ Observed flag values: `820A` off (aux on), `821A` igniting, `828A` on + aux on, 
 10. Ignite: igniting bit at once; guard on after ~25–35 s; height `FF` ~4–7 s later. Total ≈ 40 s.
 11. Off: shutdown bit within ~1–2 s, height `00` within ~10 s, then guard off.
 12. Handset changes appear in status (flame down → `77`, `64`; aux on → aux bit + `FF`).
+13. (15 Nov, first plugin test) Status is pushed to every connected client when anything changes: a second
+    client polling every 15 s logged each change made by another client within 1–2 s.
+14. (15 Nov) Ignition is not always the clean sequence in 10. Re-igniting ~45 s after an off: igniting for ~27 s,
+    then igniting cleared with NO guard bit for ~19 s, then guard on but the main burner stayed out (pilot only)
+    until a flame command (relit in ~9 s). A second re-ignite ~60 s after an off: igniting for ~40 s (top flag bit
+    cleared after 30 s, flags `021A`), then off with no pilot – a real failed ignition. Handle: never treat
+    "igniting ended" as failure; wait for pilot/on until the timeout; from pilot, send a flame command.
+16. (15 Nov 18:26–18:31, cold start) Thermostat: `B201` then `B2FD`+target → mode `1002`, flame `FF` while the room is
+    below the target. Target below the room → pilot only (height `00`, guard on) within ~8 s, and the mode field STAYS
+    `1002`. Raising the target again (`B2FD` only, no `B201`) relit the burner in ~9 s. So thermostat idle = mode `1002`
+    + pilot; it is distinguishable from manual standby (mode `0000` + pilot). Eco (`B301`) → mode `2000`, the unit set
+    the flame to `BC`/`BB` and held it for 60 s. A flame command after `B0` returned to manual. Mode commands DO return
+    acks on this unit (`B20100DC00C5`-style: mode, target, room; eco `B386…`), but success is still read from status.
+    After an off the mode reads `0000`.
+15. (15 Nov) The reported flame height settles a few counts below what was sent (D9 → D5 → D2 if you keep
+    re-sending the reported value). Remember the level that was asked for, not the reported one.
 
 ### State derivation (from one status frame + short history)
 - `shuttingDown` if bit 7.
@@ -112,7 +127,7 @@ Observed flag values: `820A` off (aux on), `821A` igniting, `828A` on + aux on, 
 ```
 src/
   index.ts            registers the platform
-  settings.ts         PLATFORM_NAME = 'MertikWifi', PLUGIN_NAME = 'homebridge-mertik-wifi'
+  settings.ts         PLATFORM_NAME = 'MertikWifiFireplace', PLUGIN_NAME = 'homebridge-mertik-wifi-fireplace'
   platform.ts         config validation, accessory discovery/restore/removal
   accessory.ts        HomeKit services <-> FireplaceController
   protocol/
@@ -170,7 +185,7 @@ One accessory per configured fireplace.
 
 ## 6. Configuration (`config.schema.json`, all with defaults)
 
-Platform: `MertikWifi`. `fireplaces[]`:
+Platform: `MertikWifiFireplace`. `fireplaces[]`:
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -183,7 +198,7 @@ Platform: `MertikWifi`. `fireplaces[]`:
 | `auxSwitch` | true | expose the aux switch |
 | `restoreFlameAfterAux` | true | re-apply flame level after an aux change |
 | `alertSensor` | `contact` | `none` / `contact` / `leak` |
-| `shutOffAfterConnectionLoss` | false | old-plugin behaviour: switch the fire off when contact returns after `connectionLossMinutes` |
+| `shutOffAfterConnectionLoss` | false | switch the fire off when contact returns after `connectionLossMinutes` |
 | `connectionLossMinutes` | 5 | |
 | `pollInterval` | 15 | seconds, 5–60 |
 | `commandRetries` | 3 | 0–5 |
@@ -214,27 +229,59 @@ Debug (config `debug`): raw frames, queue activity, state transitions.
   Use npm trusted publishing (OIDC) so no token is stored. CHECK the current npm docs when setting this up:
   the first publish of a new package may have to be done once by the owner before a trusted publisher can
   be attached.
-- First release: `0.1.0-beta.1` under the `beta` dist-tag. Repo goes public at that point (owner's approval).
-- README: features, install, config table, HomeKit behaviour, troubleshooting, protocol notes, and credits:
-  "Protocol knowledge builds on tritter/homebridge-mertik-fireplace and erdebee/homey-mertik-wifi" with a
-  polite, factual list of what this plugin does differently. Not affiliated with Maxitrol.
+- First release: `1.0.0` (owner, 15 Nov: no beta). Repo goes public at that point (owner's approval).
+- README: features, install, config table, HomeKit behaviour, troubleshooting, protocol notes, and a one-line
+  credit to the projects whose protocol work this builds on. No comparisons, and no mention of other plugins
+  anywhere else in the code or docs (owner, 15 Nov). Not affiliated with Maxitrol.
 
 ## 10. Milestones
 
 1. Scaffold from the template + protocol layer + tests.
 2. Connection + controller + fake fireplace + tests.
 3. HomeKit accessory + config schema.
-4. Real-hardware test on the owner's Homebridge (needs owner's OK: install on the Pi, disable the old plugin).
+4. Real-hardware test on the owner's Homebridge (needs owner's OK: install on the Pi).
 5. README, CI, release workflow.
-6. Publish `0.1.0-beta.1` (needs owner: npm account, OK to make the repo public, OK to publish).
+6. Publish `1.0.0` (needs owner: OK to make the repo public, OK to publish).
 
 ## 11. Open questions / v2
 
-- Thermostat idle vs manual standby are indistinguishable in status (mode `0000`, height `00`). Resolve before
-  thermostat control.
-- Does the unit enforce a wait between off and re-ignite? (Old plugin waits 30 s.) Until known, refuse ignite
-  for 30 s after a shutdown and log why.
-- Confirm unprompted status pushes with more than one observation.
-- Cause of the owner's intermittent "off ignored" and "fire switches itself off" with the old plugin is not
-  proven (candidates: 10 s debounce + stale state, false-off flag, auto shut-off after connection loss).
-- v2: thermostat + eco control, child lock, timers if the protocol has them, Matter, verified application.
+- ~~Thermostat idle vs manual standby are indistinguishable~~ Resolved 15 Nov (behaviour 16): idle keeps mode `1002`.
+- ~~Does the unit enforce a wait between off and re-ignite?~~ Effectively yes (15 Nov): re-ignite ~45 s after an
+  off stopped at pilot, ~60 s failed, 3 min and from cold lit cleanly (30–35 s). Default lockout is now 180 s,
+  configurable as `reigniteWait` (30–900 s). The exact threshold between 60 s and 3 min is unknown.
+- ~~Confirm unprompted status pushes with more than one observation.~~ Confirmed 15 Nov (behaviour 13).
+
+- v2: thermostat + eco control, child lock, verified application. Timers: not in the plugin – use Home app
+  automations (owner, 15 Nov). Matter: undecided.
+- v2 decisions (owner, 15 Nov):
+  - Left-on alert: alert by default after 4 h lit (`leftOnAlertHours`, 0 = off), own sensor ("<name> Left On", same
+    type as `alertSensor`), clears when the main burner goes out; auto-off opt-in (`leftOnSwitchOff`). Built.
+  - Child lock: a switch; while on, HomeKit/automations cannot ignite, change flame or aux; off (and 0 %) always
+    allowed. Software only – the fireplace has no lock in its protocol. State persisted in the accessory context. Built.
+  - Thermostat: setting the target temperature (HeatingThresholdTemperature) puts the fire in thermostat mode;
+    moving the flame slider returns to manual. Last touched wins. Target 5–36 °C in 0.5 steps. Built.
+  - Eco: built, then removed before 1.0.0 (owner, 15 Nov: "did practically nothing" – the flame slider covers it).
+    Eco set on the handset is still recognised and reported.
+  - The aux switch is called "Boost" in HomeKit, settings and logs (owner, 15 Nov). Config keys `boostSwitch`,
+    `restoreFlameAfterBoost`.
+  - Left-on time counts while the burner is lit or the thermostat idles at pilot (so thermostat cycling does not
+    restart the clock). Manual standby (pilot only) does not count and resets it (owner default, 15 Nov).
+- Final review (15 Nov), safety rules added:
+  - Nothing but switch-on (Active), the flame slider and a queued switch-on may ignite. Eco is refused while the fire
+    is off; a target set while off is saved and applied at the next switch-on (HAP setpoint semantics).
+  - Off is confirmed only when the fireplace reports off (shutdown bit alone is not enough; wait up to 30 s, then resend).
+  - An off pre-empts a running command at once, even while its send is waiting for a reconnect (that send is dropped).
+  - Invalid optional settings fall back to defaults; an entry with a bad name/ip never causes cached accessories to be
+    removed.
+  - Reachable/healthy windows scale with `pollInterval`.
+  - Child lock refuses Active=1 unless the fire is already burning (also from pilot). Eco and aux are refused at manual
+    standby (pilot only), as an aux change resets the flame to full and might relight the burner (unmeasured).
+  - A stalled shutdown (bit clears without the fire going off) is resent at once. An off right after an ignite needs
+    the shutdown bit or two off frames. A bad `port` rejects the entry (it is part of the accessory identity).
+  - HeaterCooler/Fanv2 do not support StatusFault in HAP-NodeJS, so unreachable = "No Response" (replaces §5's StatusFault).
+- v2 (original note): "left on too long" alert (owner's request, 15 Nov). A configurable time (e.g. `onAlertHours`, off by default)
+  after which the plugin raises an alert if the main burner has been lit continuously, in case something
+  malfunctions or it was forgotten. To decide: its own sensor or shared with the shutdown alert (keep the two
+  distinguishable in the log either way); whether pilot-only time counts; whether handset or thermostat
+  re-lights restart the clock; whether it may also switch the fire off (opt-in only, never by default);
+  how it clears (fire off, or the user acknowledging it).

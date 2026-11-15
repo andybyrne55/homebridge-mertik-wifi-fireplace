@@ -1,0 +1,255 @@
+{
+  "pluginAlias": "MertikWifiFireplace",
+  "pluginType": "platform",
+  "singular": true,
+  "strictValidation": false,
+  "headerDisplay": "Control Mertik Maxitrol WiFi gas fireplaces. Every command is verified from the fireplace's own status and retried. Give the WiFi module a fixed IP address (DHCP reservation) on your router.",
+  "footerDisplay": "Not affiliated with Maxitrol. See the README for how each setting behaves.",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "title": "Platform name",
+        "type": "string",
+        "default": "Mertik WiFi Fireplace"
+      },
+      "fireplaces": {
+        "title": "Fireplaces",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "name",
+            "ip",
+            "tileType",
+            "zeroPercent",
+            "igniteLevel",
+            "alertSensor"
+          ],
+          "properties": {
+            "name": {
+              "title": "Name",
+              "type": "string",
+              "description": "Accessory name in HomeKit.",
+              "default": "Fireplace"
+            },
+            "ip": {
+              "title": "IP address",
+              "type": "string",
+              "description": "Fixed IP address (or host name) of the fireplace's WiFi module.",
+              "placeholder": "192.168.1.101"
+            },
+            "port": {
+              "title": "Port",
+              "type": "integer",
+              "default": 2000,
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "tileType": {
+              "title": "HomeKit tile",
+              "type": "string",
+              "default": "heater",
+              "oneOf": [
+                {
+                  "title": "Heater (on/off, flame as speed, room temperature)",
+                  "enum": [
+                    "heater"
+                  ]
+                },
+                {
+                  "title": "Fan (on/off, flame as speed)",
+                  "enum": [
+                    "fan"
+                  ]
+                }
+              ],
+              "description": "Never a light bulb, so \"turn off all the lights\" scenes cannot touch the fire."
+            },
+            "zeroPercent": {
+              "title": "What 0 % does",
+              "type": "string",
+              "default": "off",
+              "oneOf": [
+                {
+                  "title": "Switch the fire off",
+                  "enum": [
+                    "off"
+                  ]
+                },
+                {
+                  "title": "Standby (pilot only)",
+                  "enum": [
+                    "pilot"
+                  ]
+                }
+              ]
+            },
+            "igniteLevel": {
+              "title": "Flame after ignition",
+              "type": "string",
+              "default": "last",
+              "pattern": "^(last|full|[1-9][0-9]?|100)$",
+              "description": "\"last\" = the last flame level used, \"full\" = 100 %, or a percentage from 1 to 100."
+            },
+            "thermostatControl": {
+              "title": "Thermostat control",
+              "type": "boolean",
+              "default": true,
+              "description": "Heater tile only: setting the target temperature while the fire is on switches to thermostat mode (it holds the room at that temperature). A target set while the fire is off is saved and used the next time you switch it on – it never lights the fire. Moving the flame slider returns to manual."
+            },
+            "boostSwitch": {
+              "title": "Show the boost switch",
+              "type": "boolean",
+              "default": true,
+              "description": "Boost lights the second (back) row of burners for a bigger fire. The fireplace's remote calls this \"aux\"."
+            },
+            "childLockSwitch": {
+              "title": "Show the child lock switch",
+              "type": "boolean",
+              "default": true,
+              "description": "When the lock is on, HomeKit and automations cannot light the fire or change it. Switching off always works. The handset is not affected."
+            },
+            "restoreFlameAfterBoost": {
+              "title": "Keep the flame level when boost is switched",
+              "type": "boolean",
+              "default": true,
+              "description": "The fireplace jumps to full flame whenever boost is switched on or off. When on, the plugin puts your flame level back."
+            },
+            "alertSensor": {
+              "title": "Alert sensors (shutdown and left-on)",
+              "type": "string",
+              "default": "contact",
+              "oneOf": [
+                {
+                  "title": "None (no alert sensors)",
+                  "enum": [
+                    "none"
+                  ]
+                },
+                {
+                  "title": "Contact sensor (opens on alert)",
+                  "enum": [
+                    "contact"
+                  ]
+                },
+                {
+                  "title": "Leak sensor (leak detected on alert)",
+                  "enum": [
+                    "leak"
+                  ]
+                }
+              ],
+              "description": "Sensor type for the shutdown alert and the left-on alert. The shutdown alert trips only when the fire could not be confirmed off after all retries – never for mere unreachability – and clears when the fire is confirmed off. 'None' removes both alert sensors. Turn on notifications for the sensors in the Home app (see the README) so you are told when one trips."
+            },
+            "leftOnAlertHours": {
+              "title": "Left-on alert after (hours)",
+              "type": "number",
+              "default": 4,
+              "minimum": 0,
+              "maximum": 24,
+              "description": "Raise an alert when the fire has been on continuously for this long (burning, or idling at pilot in thermostat mode; pilot-only standby does not count), in case it was forgotten or something is wrong. 0 = off."
+            },
+            "leftOnSwitchOff": {
+              "title": "Also switch the fire off when the left-on alert is raised",
+              "type": "boolean",
+              "default": false,
+              "description": "Uses the same verified off as the Home app, with retries and the shutdown alert if it cannot be confirmed."
+            },
+            "shutOffAfterConnectionLoss": {
+              "title": "Switch the fire off after a connection loss",
+              "type": "boolean",
+              "default": false,
+              "description": "When contact with the fireplace returns after at least the time below, switch the fire off."
+            },
+            "connectionLossMinutes": {
+              "title": "Connection loss time (minutes)",
+              "type": "integer",
+              "default": 5,
+              "minimum": 1,
+              "maximum": 1440,
+              "condition": {
+                "functionBody": "return model.fireplaces[arrayIndices] && model.fireplaces[arrayIndices].shutOffAfterConnectionLoss === true;"
+              }
+            },
+            "pollInterval": {
+              "title": "Status poll interval (seconds)",
+              "type": "integer",
+              "default": 15,
+              "minimum": 5,
+              "maximum": 60,
+              "description": "While a command is being checked the plugin polls every 2 s regardless. Changes made on the handset show up straight away, because the fireplace reports them itself."
+            },
+            "commandRetries": {
+              "title": "Off retries",
+              "type": "integer",
+              "default": 3,
+              "minimum": 0,
+              "maximum": 5,
+              "description": "How many times an unconfirmed off is resent before the alert trips."
+            },
+            "reigniteWait": {
+              "title": "Wait before re-igniting (seconds)",
+              "type": "integer",
+              "default": 180,
+              "minimum": 30,
+              "maximum": 900,
+              "description": "After the fire goes off, switching it on again is refused for this long. On the test unit, re-igniting within 60 s of an off failed or stopped at pilot; after 3 minutes it lit normally."
+            },
+            "debug": {
+              "title": "Debug logging",
+              "type": "boolean",
+              "default": false,
+              "description": "Log every packet and status frame."
+            }
+          }
+        }
+      }
+    }
+  },
+  "layout": [
+    {
+      "key": "fireplaces",
+      "type": "array",
+      "orderable": false,
+      "buttonText": "Add fireplace",
+      "items": [
+        "fireplaces[].name",
+        "fireplaces[].ip",
+        {
+          "type": "fieldset",
+          "title": "HomeKit",
+          "expandable": true,
+          "expanded": false,
+          "items": [
+            "fireplaces[].tileType",
+            "fireplaces[].zeroPercent",
+            "fireplaces[].igniteLevel",
+            "fireplaces[].thermostatControl",
+            "fireplaces[].boostSwitch",
+            "fireplaces[].childLockSwitch",
+            "fireplaces[].restoreFlameAfterBoost",
+            "fireplaces[].alertSensor",
+            "fireplaces[].leftOnAlertHours",
+            "fireplaces[].leftOnSwitchOff"
+          ]
+        },
+        {
+          "type": "fieldset",
+          "title": "Advanced",
+          "expandable": true,
+          "expanded": false,
+          "items": [
+            "fireplaces[].port",
+            "fireplaces[].pollInterval",
+            "fireplaces[].commandRetries",
+            "fireplaces[].reigniteWait",
+            "fireplaces[].shutOffAfterConnectionLoss",
+            "fireplaces[].connectionLossMinutes",
+            "fireplaces[].debug"
+          ]
+        }
+      ]
+    }
+  ]
+}

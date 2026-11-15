@@ -343,7 +343,10 @@ describe('aux', () => {
   it('aux change resets the flame to FF and the plugin restores it', async () => {
     const { ctrl, fake, logs } = await setup((f) => f.setOn(0xff, true));
     assert.equal(await ctrl.requestFlame(0xa0), true);
+    const shown: number[] = [];
+    ctrl.on('update', (v: FireplaceView) => shown.push(v.flamePercent));
     assert.equal(await ctrl.requestAux(false), true);
+    assert.ok(!shown.includes(100), 'no flash of 100 % while restoring');
     assert.equal(fake.aux, false);
     assert.ok(Math.abs(ctrl.lastStatus!.flameHeight - 0xa0) <= 8, 'flame restored');
     assert.ok(has(logs, 'Aux off'));
@@ -432,5 +435,17 @@ describe('handset', () => {
     await sleep(700); // lockout
     assert.equal(await ctrl.requestOn(), true);
     assert.ok(Math.abs(ctrl.lastStatus!.flameHeight - 0x9d) <= 8, 'relit at the remembered level');
+  });
+});
+
+describe('HomeKit quirks', () => {
+  it('Active=1 while on, or alongside a slider change, does not reset the flame', async () => {
+    const { ctrl, fake } = await setup((f) => f.setOn(0xa0), { igniteLevel: 'full' });
+    assert.equal(await ctrl.requestOn(), true);
+    const flame = ctrl.requestFlame(0xc0);
+    assert.equal(await ctrl.requestOn(), true);
+    assert.equal(await flame, true);
+    assert.equal(fake.count('16'), 1);
+    assert.equal(fake.count('1A'), 0);
   });
 });

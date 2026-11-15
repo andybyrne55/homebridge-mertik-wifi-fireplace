@@ -246,7 +246,11 @@ export class FireplaceController extends EventEmitter {
     if (existing) {
       return existing.promise;
     }
-    if (!this.busy && this.status?.state === 'on') {
+    // HomeKit often sends Active=1 together with a slider change, or while the fire is already on:
+    // that must not ignite again or reset the flame to the ignite level.
+    const state = this.status?.state;
+    const offPending = this.findItem('off') !== undefined;
+    if (!offPending && (this.desired.power === 'on' || state === 'on' || state === 'igniting')) {
       return Promise.resolve(true);
     }
     const flameByte = this.igniteTargetByte();
@@ -746,6 +750,12 @@ export class FireplaceController extends EventEmitter {
     const flameBefore = this.lastFlameByte;
     const wasLit = this.status?.state === 'on';
     const word = on ? 'on' : 'off';
+    const restore = this.options.restoreFlameAfterAux && wasLit && flameBefore !== undefined && flameBefore < FLAME_MAX - FLAME_TOLERANCE;
+    if (restore && this.desired.power !== 'off') {
+      // The unit jumps to full on an aux change; show the level we are about to restore, not a flash of 100 %.
+      this.desired = { ...this.desired, power: 'on', flameByte: flameBefore };
+      this.emitUpdate();
+    }
     let ok = false;
     for (let attempt = 0; attempt < 2 && !ok && !token.aborted; attempt++) {
       if (attempt > 0) {
@@ -762,7 +772,7 @@ export class FireplaceController extends EventEmitter {
       return false;
     }
     this.log.info(`Aux ${word}`);
-    if (this.options.restoreFlameAfterAux && wasLit && flameBefore !== undefined && flameBefore < FLAME_MAX - FLAME_TOLERANCE) {
+    if (restore && flameBefore !== undefined) {
       // The unit resets the flame to full on every aux change; wait for that before restoring.
       await this.waitFor((s) => s.state !== 'on' || s.flameHeight >= FLAME_MAX - FLAME_TOLERANCE, this.timing.auxFlameResetWaitMs);
       if (token.aborted || this.status?.state !== 'on') {

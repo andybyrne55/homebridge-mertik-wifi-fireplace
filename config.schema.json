@@ -1,0 +1,173 @@
+{
+  "pluginAlias": "MertikWifi",
+  "pluginType": "platform",
+  "singular": true,
+  "strictValidation": false,
+  "headerDisplay": "Control Mertik Maxitrol WiFi gas fireplaces. Every command is verified from the fireplace's own status and retried. Give the WiFi module a fixed IP address (DHCP reservation) on your router.",
+  "footerDisplay": "Not affiliated with Maxitrol. See the README for how each setting behaves.",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "title": "Platform name",
+        "type": "string",
+        "default": "Mertik WiFi"
+      },
+      "fireplaces": {
+        "title": "Fireplaces",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["name", "ip"],
+          "properties": {
+            "name": {
+              "title": "Name",
+              "type": "string",
+              "description": "Accessory name in HomeKit.",
+              "default": "Fireplace"
+            },
+            "ip": {
+              "title": "IP address",
+              "type": "string",
+              "description": "Fixed IP address (or host name) of the fireplace's WiFi module.",
+              "placeholder": "192.168.1.101"
+            },
+            "port": {
+              "title": "Port",
+              "type": "integer",
+              "default": 2000,
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "tileType": {
+              "title": "HomeKit tile",
+              "type": "string",
+              "default": "heater",
+              "oneOf": [
+                { "title": "Heater (on/off, flame as speed, room temperature)", "enum": ["heater"] },
+                { "title": "Fan (on/off, flame as speed)", "enum": ["fan"] }
+              ],
+              "description": "Never a light bulb, so \"turn off all the lights\" scenes cannot touch the fire."
+            },
+            "zeroPercent": {
+              "title": "What 0 % does",
+              "type": "string",
+              "default": "off",
+              "oneOf": [
+                { "title": "Switch the fire off", "enum": ["off"] },
+                { "title": "Standby (pilot only)", "enum": ["pilot"] }
+              ]
+            },
+            "igniteLevel": {
+              "title": "Flame after ignition",
+              "type": "string",
+              "default": "last",
+              "pattern": "^(last|full|[1-9][0-9]?|100)$",
+              "description": "\"last\" = the last flame level used, \"full\" = 100 %, or a percentage from 1 to 100."
+            },
+            "auxSwitch": {
+              "title": "Show the aux (second burner) switch",
+              "type": "boolean",
+              "default": true
+            },
+            "restoreFlameAfterAux": {
+              "title": "Restore the flame level after an aux change",
+              "type": "boolean",
+              "default": true,
+              "description": "The fireplace resets the flame to full whenever aux is switched. When on, the plugin puts it back."
+            },
+            "alertSensor": {
+              "title": "Shutdown alert sensor",
+              "type": "string",
+              "default": "contact",
+              "oneOf": [
+                { "title": "None", "enum": ["none"] },
+                { "title": "Contact sensor (opens on alert)", "enum": ["contact"] },
+                { "title": "Leak sensor (critical notification)", "enum": ["leak"] }
+              ],
+              "description": "Trips only when the fire could not be confirmed off after all retries. Never for mere unreachability. Clears when the fire is confirmed off."
+            },
+            "shutOffAfterConnectionLoss": {
+              "title": "Switch the fire off after a connection loss",
+              "type": "boolean",
+              "default": false,
+              "description": "Old-plugin behaviour: when contact returns after the time below, switch the fire off."
+            },
+            "connectionLossMinutes": {
+              "title": "Connection loss time (minutes)",
+              "type": "integer",
+              "default": 5,
+              "minimum": 1,
+              "maximum": 1440,
+              "condition": {
+                "functionBody": "return model.fireplaces[arrayIndices] && model.fireplaces[arrayIndices].shutOffAfterConnectionLoss === true;"
+              }
+            },
+            "pollInterval": {
+              "title": "Status poll interval (seconds)",
+              "type": "integer",
+              "default": 15,
+              "minimum": 5,
+              "maximum": 60,
+              "description": "While a command is being verified the plugin polls every 2 s regardless."
+            },
+            "commandRetries": {
+              "title": "Off retries",
+              "type": "integer",
+              "default": 3,
+              "minimum": 0,
+              "maximum": 5,
+              "description": "How many times an unconfirmed off is resent before the alert trips."
+            },
+            "debug": {
+              "title": "Debug logging",
+              "type": "boolean",
+              "default": false,
+              "description": "Log every packet and status frame."
+            }
+          }
+        }
+      }
+    }
+  },
+  "layout": [
+    {
+      "key": "fireplaces",
+      "type": "array",
+      "orderable": false,
+      "buttonText": "Add fireplace",
+      "items": [
+        "fireplaces[].name",
+        "fireplaces[].ip",
+        {
+          "type": "fieldset",
+          "title": "HomeKit",
+          "expandable": true,
+          "expanded": false,
+          "items": [
+            "fireplaces[].tileType",
+            "fireplaces[].zeroPercent",
+            "fireplaces[].igniteLevel",
+            "fireplaces[].auxSwitch",
+            "fireplaces[].restoreFlameAfterAux",
+            "fireplaces[].alertSensor"
+          ]
+        },
+        {
+          "type": "fieldset",
+          "title": "Advanced",
+          "expandable": true,
+          "expanded": false,
+          "items": [
+            "fireplaces[].port",
+            "fireplaces[].pollInterval",
+            "fireplaces[].commandRetries",
+            "fireplaces[].shutOffAfterConnectionLoss",
+            "fireplaces[].connectionLossMinutes",
+            "fireplaces[].debug"
+          ]
+        }
+      ]
+    }
+  ]
+}

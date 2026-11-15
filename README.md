@@ -1,7 +1,7 @@
 # homebridge-mertik-wifi-fireplace
 
 [![Build, lint and test](https://github.com/andybyrne55/homebridge-mertik-wifi-fireplace/actions/workflows/build.yml/badge.svg)](https://github.com/andybyrne55/homebridge-mertik-wifi-fireplace/actions/workflows/build.yml)
-[![npm](https://img.shields.io/npm/v/homebridge-mertik-wifi-fireplace/beta)](https://www.npmjs.com/package/homebridge-mertik-wifi-fireplace)
+[![npm](https://img.shields.io/npm/v/homebridge-mertik-wifi-fireplace)](https://www.npmjs.com/package/homebridge-mertik-wifi-fireplace)
 
 HomeKit control for gas fireplaces with a **Mertik Maxitrol WiFi module** (GV60 family), through [Homebridge](https://homebridge.io).
 
@@ -46,10 +46,10 @@ retried if it did not take effect. If the fire cannot be confirmed off, you get 
 Search for **Mertik WiFi Fireplace** in the Homebridge UI plugins tab, or:
 
 ```sh
-npm install -g homebridge-mertik-wifi-fireplace@beta
+npm install -g homebridge-mertik-wifi-fireplace
 ```
 
-If another plugin controlled your fireplace before, remove it first (see [Troubleshooting](#troubleshooting)).
+If the fireplace was already in HomeKit through other software, remove that first (see [Troubleshooting](#troubleshooting)).
 
 ## Configuration
 
@@ -77,18 +77,18 @@ Use the plugin's settings in the Homebridge UI, or add this to `config.json`:
 | `ecoSwitch` | `true` | Show the eco switch. |
 | `auxSwitch` | `true` | Show a switch for the second burner row. |
 | `restoreFlameAfterAux` | `true` | Put the flame back after an aux change (the fireplace resets it to full). |
-| `alertSensor` | `contact` | Shutdown alert: `none`, `contact` (opens on alert) or `leak` (leak detected on alert). |
-| `leftOnAlertHours` | `4` | Raise the left-on alert after the fire has been on (lit or idling at pilot) continuously this long (hours, 0 = off). Same sensor type as `alertSensor`. |
+| `alertSensor` | `contact` | Sensor type for the shutdown and left-on alerts: `contact` (opens on alert), `leak` (leak detected on alert), or `none` (no alert sensors at all). |
+| `leftOnAlertHours` | `4` | Raise the left-on alert after the fire has been on continuously this long (hours, 0 = off): burning, or idling at pilot in thermostat mode. Pilot-only standby does not count. The count starts again if Homebridge restarts. |
 | `leftOnSwitchOff` | `false` | Also switch the fire off when the left-on alert is raised. |
 | `childLockSwitch` | `true` | Show the child lock switch. |
 | `shutOffAfterConnectionLoss` | `false` | When contact returns after a loss of at least `connectionLossMinutes`, switch the fire off. |
 | `connectionLossMinutes` | `5` | See above. |
-| `pollInterval` | `15` | Seconds between status checks when idle (5–60). While a command is checked, the plugin polls every 2 s. |
+| `pollInterval` | `15` | Seconds between status checks when idle (5–60). While a command is checked, the plugin polls every 2 s. Changes from the handset show up straight away regardless, because the fireplace reports them itself. |
 | `commandRetries` | `3` | How many times an unconfirmed off is resent before the alert trips (0–5). |
 | `reigniteWait` | `180` | Seconds after the fire goes off before it may be lit again (30–900). Re-igniting sooner failed or stopped at pilot on the test unit. |
 | `debug` | `false` | Log every packet and status frame. |
 
-Invalid entries are reported in the log and skipped; the plugin does not crash on bad config.
+An invalid setting is reported in the log and its default is used instead. A fireplace with a missing or invalid name or IP address is skipped (its existing HomeKit accessory is kept until the config is fixed). The plugin never crashes on bad config.
 
 ## How it behaves in HomeKit
 
@@ -100,8 +100,9 @@ Invalid entries are reported in the log and skipped; the plugin does not crash o
 | Set flame 1–100 % while off | Ignites first, then sets the flame. |
 | Set flame 0 % | Off, or pilot only (`zeroPercent`). |
 | Toggle Aux | Switches the back burner row, then restores your flame level. |
-| Set the target temperature (heater tile) | Thermostat mode: lights the fire first if needed, then the fireplace heats until the room reaches the target and idles at pilot (tile shows on, not heating). |
-| Turn Eco on / off | Eco mode / back to manual, keeping the fire lit. |
+| Set the target temperature while the fire is on (heater tile) | Thermostat mode: the fireplace heats until the room reaches the target, then idles at pilot (tile shows on, not heating), and relights by itself when the room cools. |
+| Set the target temperature while the fire is off | Saved only – the fire stays off. The next time you switch it on, it starts in thermostat mode at that target. |
+| Turn Eco on / off | Eco mode / back to manual, keeping the fire lit. Eco only works while the fire is on; it never lights it. |
 | Turn on the child lock | HomeKit and automations can no longer light the fire or change it; off still works. |
 | Use the handset | HomeKit follows within a few seconds and the log says "Changed on handset: …". |
 | Switch on within 3 minutes of switching off | Refused, with a log line saying when to try again. The fireplace does not light reliably sooner (`reigniteWait`). |
@@ -116,13 +117,14 @@ background.
   (`nc -vz <ip> 2000`). A brief outage is normal; the plugin reconnects by itself.
 - **"Ignite refused …".** The plugin waits `reigniteWait` (3 minutes by default) between the fire going off and igniting again.
   The plugin only knows about an off it has seen; after a Homebridge restart, a quick re-ignite may fail and is reported.
-- **"Ignition failed … reports the fire is off".** The fireplace ran its ignition sequence but the pilot did not
-  stay lit. The plugin does not retry automatically. Check the gas supply and try the handset.
+- **"Ignition failed: no pilot flame …".** The fireplace ran its ignition sequence but the pilot did not
+  light. The plugin does not retry automatically. Check the gas supply and try the handset.
 - **"Off NOT confirmed".** The fireplace did not confirm the off after all retries. Check the fire and use the
   handset. The alert sensor clears itself as soon as the fire is confirmed off.
-- **Two Fire tiles, or a tile stuck showing the fire on.** If another plugin controlled the fireplace before, uninstall it,
-  or disable it and remove its accessory (Homebridge UI → Settings → Remove single cached accessory). Homebridge can keep
-  showing a disabled plugin's accessory with its last state frozen. Rebuild scenes and automations with the new tile.
+- **Two Fire tiles, or a tile stuck showing the fire on.** If the fireplace was in HomeKit through other software before,
+  remove that software's accessory (for a Homebridge plugin: Homebridge UI → Settings → Remove single cached accessory).
+  Homebridge can keep showing a disabled plugin's accessory with its last state frozen. Rebuild scenes and automations with
+  the new tile.
 - **Something else.** Turn on `debug` for the fireplace, reproduce the problem and open an issue with the log.
 
 ## Protocol notes

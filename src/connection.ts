@@ -43,7 +43,8 @@ export const DEFAULT_CONNECTION_TIMING: ConnectionTiming = {
 /** What the controller needs from a connection (lets tests swap it). */
 export interface FireplaceLink {
   readonly reachable: boolean;
-  send(data: Buffer, label: string): Promise<boolean>;
+  /** `cancelled` is checked just before writing (after any reconnect); if it returns true nothing is sent. */
+  send(data: Buffer, label: string, cancelled?: () => boolean): Promise<boolean>;
   setFastPolling(on: boolean): void;
   requestStatus(): void;
   on(event: 'status', listener: (status: FireplaceStatus) => void): this;
@@ -130,7 +131,7 @@ export class Connection extends EventEmitter implements FireplaceLink {
    * Send a command. Reconnects first if the socket is not healthy. Resolves false if it could not be sent
    * (never rejects). Success of the command itself must be verified from status.
    */
-  async send(data: Buffer, label: string): Promise<boolean> {
+  async send(data: Buffer, label: string, cancelled?: () => boolean): Promise<boolean> {
     if (this.stopped) {
       return false;
     }
@@ -146,6 +147,10 @@ export class Connection extends EventEmitter implements FireplaceLink {
         this.log.debug(`could not connect to send "${label}"`);
         return false;
       }
+    }
+    if (cancelled?.()) {
+      this.log.debug(`"${label}" cancelled before sending`);
+      return false;
     }
     return this.write(data, label);
   }

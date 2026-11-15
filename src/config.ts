@@ -56,8 +56,12 @@ export const CONFIG_DEFAULTS = {
 };
 
 export interface ValidationResult {
+  /** Present unless name or ip is unusable. */
   config?: FireplaceConfig;
+  /** Problems that make the entry unusable (name, ip). */
   errors: string[];
+  /** Optional settings that were invalid and replaced by their defaults. */
+  warnings: string[];
 }
 
 const HOSTNAME = /^(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$/;
@@ -68,8 +72,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function validateFireplace(raw: unknown): ValidationResult {
   const errors: string[] = [];
+  const warnings: string[] = [];
   if (!isRecord(raw)) {
-    return { errors: ['entry is not an object'] };
+    return { errors: ['entry is not an object'], warnings };
   }
 
   const name = typeof raw.name === 'string' ? raw.name.trim() : '';
@@ -90,7 +95,7 @@ export function validateFireplace(raw: unknown): ValidationResult {
     }
     const n = typeof v === 'number' ? v : Number(v);
     if (!Number.isInteger(n) || n < min || n > max) {
-      errors.push(`"${key}" must be a whole number from ${min} to ${max} (got ${JSON.stringify(v)})`);
+      warnings.push(`"${key}" must be a whole number from ${min} to ${max} (got ${JSON.stringify(v)})`);
       return def;
     }
     return n;
@@ -102,7 +107,7 @@ export function validateFireplace(raw: unknown): ValidationResult {
     }
     const n = typeof v === 'number' ? v : Number(v);
     if (!Number.isFinite(n) || n <= minExclusive || n > max) {
-      errors.push(`"${key}" must be a number above ${minExclusive} and at most ${max} (got ${JSON.stringify(v)})`);
+      warnings.push(`"${key}" must be a number above ${minExclusive} and at most ${max} (got ${JSON.stringify(v)})`);
       return def;
     }
     return n;
@@ -113,7 +118,7 @@ export function validateFireplace(raw: unknown): ValidationResult {
       return def;
     }
     if (typeof v !== 'boolean') {
-      errors.push(`"${key}" must be true or false (got ${JSON.stringify(v)})`);
+      warnings.push(`"${key}" must be true or false (got ${JSON.stringify(v)})`);
       return def;
     }
     return v;
@@ -124,7 +129,7 @@ export function validateFireplace(raw: unknown): ValidationResult {
       return def;
     }
     if (typeof v !== 'string' || !allowed.includes(v as T)) {
-      errors.push(`"${key}" must be one of ${allowed.join(', ')} (got ${JSON.stringify(v)})`);
+      warnings.push(`"${key}" must be one of ${allowed.join(', ')} (got ${JSON.stringify(v)})`);
       return def;
     }
     return v as T;
@@ -140,7 +145,7 @@ export function validateFireplace(raw: unknown): ValidationResult {
       if (Number.isInteger(n) && n >= 1 && n <= 100) {
         igniteLevel = n;
       } else {
-        errors.push(`"igniteLevel" must be "last", "full" or a percentage from 1 to 100 (got ${JSON.stringify(rawLevel)})`);
+        warnings.push(`"igniteLevel" must be "last", "full" or a percentage from 1 to 100 (got ${JSON.stringify(rawLevel)})`);
       }
     }
   }
@@ -168,5 +173,5 @@ export function validateFireplace(raw: unknown): ValidationResult {
     debug: bool('debug', CONFIG_DEFAULTS.debug),
   };
 
-  return errors.length ? { errors } : { config, errors };
+  return errors.length ? { errors, warnings } : { config, errors, warnings };
 }

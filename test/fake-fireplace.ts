@@ -55,6 +55,8 @@ export class FakeFireplace {
   ignitionGapMs = 0;
   /** After ignition the main burner stays out (pilot only) until a flame command. */
   mainBurnerStaysOut = false;
+  /** Off sets the shutdown bit but the fire never actually goes out. */
+  shutdownStalls = false;
   /** Leave the next N status requests unanswered. */
   dropStatusReplies = 0;
   /** Reported height = sent + skew (for lit values below FF). */
@@ -313,6 +315,12 @@ export class FakeFireplace {
     this.after(this.t.offShutdownDelayMs, () => {
       this.igniting = false;
       this.shuttingDown = true;
+      if (this.shutdownStalls) {
+        this.after(this.t.offHeightMs, () => {
+          this.shuttingDown = false; // gives up: still lit
+        }, push);
+        return;
+      }
       this.after(this.t.offHeightMs, () => {
         this.height = 0;
         this.after(this.t.offGuardMs, () => {

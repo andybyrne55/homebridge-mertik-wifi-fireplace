@@ -62,9 +62,15 @@ export class MertikWifiFireplacePlatform implements DynamicPlatformPlugin {
 
     const configs: FireplaceConfig[] = [];
     const seen = new Set<string>();
+    let rejected = 0;
     entries.forEach((raw, index) => {
-      const { config, errors } = validateFireplace(raw);
+      const { config, errors, warnings } = validateFireplace(raw);
+      const label0 = typeof (raw as { name?: unknown })?.name === 'string' ? `"${(raw as { name: string }).name}"` : `#${index + 1}`;
+      for (const w of warnings) {
+        this.log.warn(`Fireplace ${label0}: ${w} – using the default instead`);
+      }
       if (!config) {
+        rejected++;
         const label = typeof (raw as { name?: unknown })?.name === 'string' ? `"${(raw as { name: string }).name}"` : `#${index + 1}`;
         this.log.error(`Fireplace ${label} skipped – invalid config: ${errors.join('; ')}`);
         return;
@@ -101,7 +107,10 @@ export class MertikWifiFireplacePlatform implements DynamicPlatformPlugin {
     }
 
     const stale = [...this.cached.values()].filter((a) => !keep.has(a.UUID));
-    if (stale.length) {
+    if (stale.length && rejected > 0) {
+      // A fireplace entry could not be used: keep its accessory (rooms, scenes, automations) until the config is fixed.
+      this.log.warn(`Keeping ${stale.length} cached fireplace accessory(s) because a fireplace entry has errors; fix the config to remove them.`);
+    } else if (stale.length) {
       for (const a of stale) {
         this.log.info(`Removing fireplace "${a.displayName}" (no longer in the config)`);
       }

@@ -9,7 +9,7 @@ export type FireMode = 'manual' | 'thermostat' | 'eco';
 
 /**
  * - `off`: burner and pilot out
- * - `pilot`: standby, pilot only (or thermostat idle – indistinguishable, see DESIGN §11)
+ * - `pilot`: pilot only – manual standby (mode manual) or thermostat idle (mode thermostat)
  * - `igniting`: ignition sequence running
  * - `on`: main burner lit
  * - `shuttingDown`: off sequence running

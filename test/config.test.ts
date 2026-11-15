@@ -21,16 +21,26 @@ describe('config validation', () => {
     assert.equal(config?.leftOnAlertHours, 0);
     assert.equal(config?.childLockSwitch, false);
   });
-  it('rejects bad entries with readable errors and never throws', () => {
+  it('rejects an entry only for a bad name or ip, and never throws', () => {
     assert.ok(validateFireplace(null).errors.length);
     assert.ok(validateFireplace('x').errors.length);
-    const { config, errors } = validateFireplace({ ip: 'not an ip!', pollInterval: 2, commandRetries: 9, tileType: 'lightbulb', igniteLevel: 0 });
+    const { config, errors } = validateFireplace({ ip: 'not an ip!' });
     assert.equal(config, undefined);
     assert.ok(errors.some((e) => e.includes('"name"')));
     assert.ok(errors.some((e) => e.includes('"ip"')));
-    assert.ok(errors.some((e) => e.includes('"pollInterval"')));
-    assert.ok(errors.some((e) => e.includes('"commandRetries"')));
-    assert.ok(errors.some((e) => e.includes('"tileType"')));
-    assert.ok(errors.some((e) => e.includes('"igniteLevel"')));
+  });
+  it('replaces bad optional settings with defaults and warns', () => {
+    const { config, errors, warnings } = validateFireplace({
+      name: 'Fire', ip: '192.168.1.101', pollInterval: 2, commandRetries: 9, tileType: 'lightbulb', igniteLevel: 0, debug: 'yes',
+    });
+    assert.deepEqual(errors, []);
+    assert.equal(config?.pollInterval, CONFIG_DEFAULTS.pollInterval);
+    assert.equal(config?.commandRetries, CONFIG_DEFAULTS.commandRetries);
+    assert.equal(config?.tileType, 'heater');
+    assert.equal(config?.igniteLevel, 'last');
+    assert.equal(config?.debug, false);
+    for (const key of ['pollInterval', 'commandRetries', 'tileType', 'igniteLevel', 'debug']) {
+      assert.ok(warnings.some((w) => w.includes(`"${key}"`)), key);
+    }
   });
 });

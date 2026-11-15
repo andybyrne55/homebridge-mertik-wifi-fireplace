@@ -69,17 +69,15 @@ export function manualMode(): Buffer {
   return frame('B0');
 }
 
-/** v2: not used by the v1 plugin. */
 export function thermostatMode(): Buffer {
   return frame('B201');
 }
 
-/** v2: not used by the v1 plugin. */
 export function ecoMode(): Buffer {
   return frame('B301');
 }
 
-/** v2: not used by the v1 plugin. Target in °C, sent as °C × 10. */
+/** Thermostat target in °C, sent as °C × 10. */
 export function setTargetTemperature(celsius: number): Buffer {
   const tenths = Math.max(0, Math.min(0xffff, Math.round(celsius * 10)));
   return frame('B2FD' + hex(tenths, 4));

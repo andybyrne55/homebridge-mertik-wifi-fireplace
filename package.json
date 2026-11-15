@@ -2,8 +2,8 @@
   "name": "homebridge-mertik-wifi-fireplace",
   "displayName": "Mertik WiFi Fireplace",
   "type": "module",
-  "version": "0.1.0-beta.1",
-  "description": "Reliable HomeKit control for Mertik Maxitrol WiFi gas fireplaces: verified on/off, flame height, aux burner and a shutdown-failure alert.",
+  "version": "1.0.0",
+  "description": "Reliable HomeKit control for Mertik Maxitrol WiFi gas fireplaces: verified on/off, flame height, aux burner, thermostat, eco, child lock, and shutdown-failure and left-on alerts.",
   "author": "Andrew Byrne",
   "license": "Apache-2.0",
   "homepage": "https://github.com/andybyrne55/homebridge-mertik-wifi-fireplace#readme",
@@ -43,7 +43,8 @@
     "lint": "eslint . --max-warnings=0",
     "test": "npm run build:test && node --test --test-concurrency=1 \"dist-test/test/**/*.test.js\"",
     "prepublishOnly": "npm run lint && npm run build",
-    "watch": "npm run build && npm link && nodemon"
+    "watch": "npm run build && npm link && nodemon",
+    "prepack": "npm run build"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

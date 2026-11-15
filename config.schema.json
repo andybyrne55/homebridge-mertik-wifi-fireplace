@@ -96,7 +96,7 @@
               "title": "Thermostat control",
               "type": "boolean",
               "default": true,
-              "description": "Heater tile only: setting the target temperature puts the fire in thermostat mode (it holds the room at that temperature); moving the flame slider returns to manual."
+              "description": "Heater tile only: setting the target temperature while the fire is on switches to thermostat mode (it holds the room at that temperature). A target set while the fire is off is saved and used the next time you switch it on – it never lights the fire. Moving the flame slider returns to manual."
             },
             "auxSwitch": {
               "title": "Show the aux (second burner) switch",
@@ -113,7 +113,7 @@
               "title": "Show the eco switch",
               "type": "boolean",
               "default": true,
-              "description": "Eco mode: the fireplace sets the flame itself to save gas. Any flame change returns to manual."
+              "description": "Eco mode: the fireplace sets the flame itself to save gas. Works only while the fire is on – it never lights the fire. Any flame change returns to manual."
             },
             "restoreFlameAfterAux": {
               "title": "Restore the flame level after an aux change",
@@ -145,7 +145,7 @@
                   ]
                 }
               ],
-              "description": "Trips only when the fire could not be confirmed off after all retries. Never for mere unreachability. Clears when the fire is confirmed off."
+              "description": "Sensor type for the shutdown alert and the left-on alert. The shutdown alert trips only when the fire could not be confirmed off after all retries – never for mere unreachability – and clears when the fire is confirmed off. 'None' removes both alert sensors."
             },
             "leftOnAlertHours": {
               "title": "Left-on alert after (hours)",
@@ -153,7 +153,7 @@
               "default": 4,
               "minimum": 0,
               "maximum": 24,
-              "description": "Raise an alert when the fire has been lit continuously for this long, in case it was forgotten or something is wrong. 0 = off. Uses the same sensor type as the shutdown alert."
+              "description": "Raise an alert when the fire has been on continuously for this long (burning, or idling at pilot in thermostat mode; pilot-only standby does not count), in case it was forgotten or something is wrong. 0 = off."
             },
             "leftOnSwitchOff": {
               "title": "Also switch the fire off when the left-on alert is raised",
@@ -182,7 +182,7 @@
               "default": 15,
               "minimum": 5,
               "maximum": 60,
-              "description": "While a command is being verified the plugin polls every 2 s regardless."
+              "description": "While a command is being checked the plugin polls every 2 s regardless. Changes made on the handset show up straight away, because the fireplace reports them itself."
             },
             "commandRetries": {
               "title": "Off retries",

@@ -261,8 +261,17 @@ Debug (config `debug`): raw frames, queue activity, state transitions.
   - Thermostat: setting the target temperature (HeatingThresholdTemperature) puts the fire in thermostat mode;
     moving the flame slider returns to manual. Last touched wins. Target 5–36 °C in 0.5 steps. Built.
   - Eco: an Eco switch; any flame change returns to manual. Built.
-  - Left-on time counts from lit until off (thermostat idle at pilot counts as on), so thermostat cycling does not
-    restart the clock.
+  - Left-on time counts while the burner is lit or the thermostat idles at pilot (so thermostat cycling does not
+    restart the clock). Manual standby (pilot only) does not count and resets it (owner default, 15 Nov).
+- Final review (15 Nov), safety rules added:
+  - Nothing but switch-on (Active), the flame slider and a queued switch-on may ignite. Eco is refused while the fire
+    is off; a target set while off is saved and applied at the next switch-on (HAP setpoint semantics).
+  - Off is confirmed only when the fireplace reports off (shutdown bit alone is not enough; wait up to 30 s, then resend).
+  - An off pre-empts a running command at once, even while its send is waiting for a reconnect (that send is dropped).
+  - Invalid optional settings fall back to defaults; an entry with a bad name/ip never causes cached accessories to be
+    removed.
+  - Reachable/healthy windows scale with `pollInterval`.
+  - HeaterCooler/Fanv2 do not support StatusFault in HAP-NodeJS, so unreachable = "No Response" (replaces §5's StatusFault).
 - v2 (original note): "left on too long" alert (owner's request, 15 Nov). A configurable time (e.g. `onAlertHours`, off by default)
   after which the plugin raises an alert if the main burner has been lit continuously, in case something
   malfunctions or it was forgotten. To decide: its own sensor or shared with the shutdown alert (keep the two

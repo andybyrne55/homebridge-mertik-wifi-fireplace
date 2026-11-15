@@ -1,6 +1,6 @@
 # Publishes to npm with trusted publishing (OIDC, no stored token) and creates the GitHub release.
 #
-# Triggered by pushing a tag vX.Y.Z or vX.Y.Z-beta.N that matches package.json.
+# Triggered by pushing a tag vX.Y.Z (or a pre-release vX.Y.Z-beta.N) that matches package.json.
 # Pre-release versions are published under the "beta" dist-tag, others under "latest".
 #
 # One-time setup (owner):
@@ -80,14 +80,6 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-      - name: Publish to npm (skipped if this version is already published)
-        run: |
-          if npm view "homebridge-mertik-wifi-fireplace@${{ steps.version.outputs.version }}" version >/dev/null 2>&1; then
-            echo "Version ${{ steps.version.outputs.version }} is already on npm; skipping publish."
-          else
-            npm $NPM_PUBLISH_COMMAND --access public --provenance --tag ${{ steps.version.outputs.dist_tag }}
-          fi
-
       - name: Extract the release notes from CHANGELOG.md
         run: |
           awk -v v="${{ steps.version.outputs.version }}" '
@@ -98,6 +90,14 @@ jobs:
           if [ ! -s release-notes.md ]; then
             echo "No CHANGELOG.md section for ${{ steps.version.outputs.version }}" >&2
             exit 1
+          fi
+
+      - name: Publish to npm (skipped if this version is already published)
+        run: |
+          if npm view "homebridge-mertik-wifi-fireplace@${{ steps.version.outputs.version }}" version >/dev/null 2>&1; then
+            echo "Version ${{ steps.version.outputs.version }} is already on npm; skipping publish."
+          else
+            npm $NPM_PUBLISH_COMMAND --access public --provenance --tag ${{ steps.version.outputs.dist_tag }}
           fi
 
       - name: Create the GitHub release

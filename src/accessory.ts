@@ -12,6 +12,7 @@ import { clampTarget, FireplaceController, TARGET_MAX, TARGET_MIN, type Fireplac
 import { FireplaceLogger, type LogSink } from './logger.js';
 import type { MertikWifiFireplacePlatform } from './platform.js';
 import { percentToByte } from './protocol/flame.js';
+import { PLUGIN_VERSION } from './settings.js';
 
 type CharacteristicType = WithUUID<new () => Characteristic>;
 
@@ -35,7 +36,13 @@ export class FireplaceAccessory {
   ) {
     const { Service: S, Characteristic: C } = platform;
     this.log = new FireplaceLogger(sink, config.name, config.debug);
-    this.connection = new Connection(config.ip, config.port, this.log, { pollIntervalMs: config.pollInterval * 1000 });
+    const pollMs = config.pollInterval * 1000;
+    // One missed reply (10 s timeout) plus a poll gap must never look like an outage.
+    this.connection = new Connection(config.ip, config.port, this.log, {
+      pollIntervalMs: pollMs,
+      reachableWindowMs: Math.max(60_000, 2 * pollMs + 15_000),
+      healthyWindowMs: Math.max(30_000, pollMs + 15_000),
+    });
     this.controller = new FireplaceController(this.connection, this.log, {
       commandRetries: config.commandRetries,
       igniteLevel: config.igniteLevel,
@@ -49,7 +56,8 @@ export class FireplaceAccessory {
     accessory.getService(S.AccessoryInformation)!
       .setCharacteristic(C.Manufacturer, 'Mertik Maxitrol')
       .setCharacteristic(C.Model, 'WiFi fireplace module')
-      .setCharacteristic(C.SerialNumber, `${config.ip}:${config.port}`);
+      .setCharacteristic(C.SerialNumber, `${config.ip}:${config.port}`)
+      .setCharacteristic(C.FirmwareRevision, PLUGIN_VERSION.split('-')[0]);
 
     // ---- main service (heater or fan); remove the other type if the tile type changed
     const heater = config.tileType === 'heater';
@@ -67,7 +75,7 @@ export class FireplaceAccessory {
     this.main.getCharacteristic(C.Active)
       .onGet(() => this.read((v) => (v.power === 'off' ? C.Active.INACTIVE : C.Active.ACTIVE)))
       .onSet((value) => this.write('Active', () => {
-        this.checkLock(value === C.Active.ACTIVE, 'switching the fire on');
+        this.checkLock(value === C.Active.ACTIVE && this.controller.view.power === 'off', 'switching the fire on');
         if (value === C.Active.ACTIVE) {
           void this.controller.requestOn();
         } else {
@@ -136,6 +144,12 @@ export class FireplaceAccessory {
       .onGet(() => this.read((v) => v.mode === 'eco'))
       .onSet((value) => this.write('Eco', () => {
         this.checkLock(true, 'changing eco mode');
+        if (value === true && !this.controller.canChangeMode()) {
+          // Eco never lights the fire: a scene or "all switches on" must not ignite it.
+          this.log.warn('Eco ignored: the fire is off (eco never lights the fire)');
+          this.refreshSoon();
+          throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.NOT_ALLOWED_IN_CURRENT_STATE);
+        }
         void (value === true ? this.controller.requestEco() : this.controller.requestManual());
       }));
 
@@ -194,9 +208,13 @@ export class FireplaceAccessory {
   private checkLock(blockedAction: boolean, what: string): void {
     if (blockedAction && this.locked) {
       this.log.warn(`Child lock is on: ${what} from HomeKit was refused`);
-      setTimeout(() => this.refresh(this.controller.view, true), 50);
+      this.refreshSoon();
       throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.NOT_ALLOWED_IN_CURRENT_STATE);
     }
+  }
+
+  private refreshSoon(): void {
+    setTimeout(() => this.refresh(this.controller.view, true), 50);
   }
 
   private write(what: string, fn: () => void): void {

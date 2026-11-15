@@ -1,7 +1,8 @@
 import { strict as assert } from 'node:assert';
+import { EventEmitter } from 'node:events';
 import { after, afterEach, describe, it } from 'node:test';
 
-import { Connection, type ConnectionTiming } from '../src/connection.js';
+import { Connection, type ConnectionTiming, type FireplaceLink } from '../src/connection.js';
 import { FireplaceController, type ControllerOptions, type ControllerTiming, type FireplaceView } from '../src/controller.js';
 import { FireplaceLogger, type LogSink } from '../src/logger.js';
 import { byteToPercent, percentToByte } from '../src/protocol/flame.js';
@@ -38,6 +39,7 @@ const FAST_CTRL: Partial<ControllerTiming> = {
   unknownStateWaitMs: 500,
   leftOnCheckMs: 50,
   modeTimeoutMs: 500,
+  offCompleteMs: 800,
 };
 
 const DEFAULT_OPTIONS: ControllerOptions = {
@@ -518,6 +520,13 @@ describe('left-on alert', () => {
     assert.equal(fake.count('10'), 0);
   });
 
+  it('manual standby (pilot only) does not count', async () => {
+    const { ctrl } = await setup((f) => f.setOn(0xff), { leftOnAlertMs: 700 });
+    assert.equal(await ctrl.requestStandby(), true);
+    await sleep(1_200);
+    assert.equal(ctrl.view.leftOnAlert, false);
+  });
+
   it('flame changes do not restart the clock; a turn-off does', async () => {
     const { ctrl } = await setup((f) => f.setOn(0xc0), { leftOnAlertMs: 900 });
     await sleep(500);
@@ -540,9 +549,15 @@ describe('left-on alert', () => {
 });
 
 describe('thermostat and eco', () => {
-  it('thermostat from off: ignites, then thermostat mode with the target', async () => {
+  it('target set while off is saved, does not light the fire, and applies at the next switch-on', async () => {
     const { ctrl, fake, logs } = await setup();
     assert.equal(await ctrl.requestThermostat(25), true);
+    await sleep(300);
+    assert.equal(fake.count('1A'), 0, 'a target change must not ignite');
+    assert.equal(ctrl.view.power, 'off');
+    assert.equal(ctrl.view.targetTemperature, 25);
+    assert.ok(has(logs, 'saved – the fire stays off'));
+    assert.equal(await ctrl.requestOn(), true);
     assert.equal(fake.count('1A'), 1);
     assert.equal(ctrl.lastStatus?.mode, 'thermostat');
     assert.equal(ctrl.lastStatus?.targetTemperature, 25);
@@ -600,12 +615,24 @@ describe('thermostat and eco', () => {
     assert.equal(ctrl.lastStatus?.state, 'on');
   });
 
-  it('off from thermostat mode is verified as usual', async () => {
-    const { ctrl } = await setup((f) => f.setOn(0xff));
+  it('eco never lights the fire', async () => {
+    const { ctrl, fake, logs } = await setup();
+    assert.equal(await ctrl.requestEco(), false);
+    await sleep(300);
+    assert.equal(fake.count('1A'), 0);
+    assert.equal(fake.count('B301'), 0);
+    assert.ok(has(logs, 'eco never lights the fire'));
+    assert.equal(ctrl.view.mode, 'manual');
+  });
+
+  it('off from thermostat mode is verified as usual, without a "manual mode" handset log', async () => {
+    const { ctrl, logs } = await setup((f) => f.setOn(0xff));
     assert.equal(await ctrl.requestThermostat(25), true);
     assert.equal(await ctrl.requestOff(), true);
     await waitUntil(() => ctrl.lastStatus?.state === 'off', 2_000, 'off');
     assert.equal(ctrl.view.mode, 'manual');
+    await sleep(300);
+    assert.ok(!has(logs, 'Changed on handset: manual mode'));
   });
 
   it('target is clamped to 5–36 °C in 0.5 steps', async () => {
@@ -614,5 +641,65 @@ describe('thermostat and eco', () => {
     assert.equal(ctrl.lastStatus?.targetTemperature, 36);
     assert.equal(await ctrl.requestThermostat(21.3), true);
     assert.equal(ctrl.lastStatus?.targetTemperature, 21.5);
+  });
+});
+
+/** Wraps a link and delays every send, like a send that first has to reconnect. */
+class SlowLink extends EventEmitter implements FireplaceLink {
+  constructor(private readonly inner: Connection, private readonly delayMs: number) {
+    super();
+    inner.on('status', (st) => this.emit('status', st));
+    inner.on('reachable', (r) => this.emit('reachable', r));
+  }
+
+  get reachable(): boolean {
+    return this.inner.reachable;
+  }
+
+  async send(data: Buffer, label: string, cancelled?: () => boolean): Promise<boolean> {
+    await sleep(this.delayMs);
+    return this.inner.send(data, label, cancelled);
+  }
+
+  setFastPolling(on: boolean): void {
+    this.inner.setFastPolling(on);
+  }
+
+  requestStatus(): void {
+    this.inner.requestStatus();
+  }
+}
+
+describe('off is never held up', () => {
+  it('an off during a slow (reconnecting) ignite send cancels the ignite and goes out at once', async () => {
+    const { fake, conn, logs } = await setup();
+    const slow = new SlowLink(conn, 1_000);
+    const log = new FireplaceLogger({ info: (m) => logs.push('INFO ' + m), warn: (m) => logs.push('WARN ' + m),
+      error: (m) => logs.push('ERROR ' + m), debug: () => undefined }, 'Slow', false);
+    const ctrl = new FireplaceController(slow, log, DEFAULT_OPTIONS, FAST_CTRL);
+    rigs.push({ fake, conn, ctrl, logs, views: [] });
+    await waitUntil(() => ctrl.lastStatus !== undefined, 2_000, 'status');
+    const on = ctrl.requestOn();
+    await sleep(100);
+    const t0 = Date.now();
+    const off = ctrl.requestOff();
+    assert.equal(await on, false);
+    await waitUntil(() => fake.count('10') > 0, 3_000, 'off sent');
+    assert.ok(Date.now() - t0 < 1_500, 'off went out with only its own send delay');
+    assert.equal(await off, true);
+    await sleep(1_200);
+    assert.equal(fake.count('1A'), 0, 'the pre-empted ignite was never sent');
+  });
+
+  it('a shutdown that starts but never finishes is retried and then raises the alert', async () => {
+    const { ctrl, fake, logs } = await setup((f) => {
+      f.setOn(0xff);
+      f.shutdownStalls = true;
+    }, { commandRetries: 1 });
+    assert.equal(await ctrl.requestOff(), false);
+    assert.equal(fake.count('10'), 2);
+    assert.ok(has(logs, 'did not report off'));
+    assert.equal(ctrl.view.alert, true);
+    assert.ok(!has(logs, 'Off confirmed'));
   });
 });

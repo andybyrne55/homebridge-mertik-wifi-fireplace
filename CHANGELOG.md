@@ -2,28 +2,24 @@
 
 All notable changes to this project are documented here. This project uses [semantic versioning](https://semver.org).
 
-## [Unreleased]
+## [1.0.0]
+
+First release.
 
 ### Added
-- Left-on alert: a sensor that trips when the fire has been on continuously for `leftOnAlertHours` (default 4),
-  with optional auto-off (`leftOnSwitchOff`).
-- Child lock switch: blocks HomeKit from lighting or changing the fire; off always works.
-- Thermostat control: setting the target temperature on the heater tile switches to thermostat mode.
-- Eco mode switch.
-
-## [0.1.0-beta.1]
-
-First public beta. Manual control only.
-
-### Added
-- On / off, each verified from the fireplace's own status and retried; off jumps the queue and is always sent.
-- Flame height 0–100 % (1–100 % = the fireplace's full usable range), with slider drags coalesced.
+- On / off, each verified from the fireplace's own status and retried. Off is sent at once, ahead of anything else,
+  and is only confirmed when the fireplace reports the fire off.
+- Flame height 0–100 % across the fireplace's full usable range, with slider drags coalesced into one command.
 - Aux (second burner row) switch; the flame level is restored after an aux change.
-- True state in HomeKit, including changes made on the handset; no flip-back while a command is running.
+- Thermostat control on the heater tile: setting the target temperature switches to thermostat mode. A target set
+  while the fire is off is saved and applied at the next switch-on; it never lights the fire.
+- Eco mode switch (only while the fire is on; it never lights the fire).
+- Child lock switch: HomeKit and automations cannot light or change the fire; off always works.
 - Shutdown alert sensor (contact or leak) that trips only when the fire could not be confirmed off.
-- Thermostat / eco mode set on the handset is recognised and logged (not controlled yet).
+- Left-on alert sensor after the fire has been on for a set time (default 4 h), with optional auto-off.
+- True state in HomeKit, including changes made on the handset; no flip-back while a command is running.
+- Copes with the fireplace's real behaviour: a pause with no pilot signal during ignition, ignition stopping at pilot,
+  transient full-flame readings when turning down, and a 3-minute wait needed between off and re-ignition
+  (`reigniteWait`).
 - "No Response" in HomeKit when the fireplace is unreachable; reconnects with backoff.
-- Waits 3 minutes (configurable) between the fire going off and re-igniting; sooner, the test unit failed to light.
-- Ignition copes with the unit's real behaviour: a pause with no pilot signal after igniting, and stopping at pilot
-  (the plugin then lights the main burner itself).
-- Settings GUI for every option.
+- Settings GUI for every option; invalid settings fall back to their defaults with a warning.

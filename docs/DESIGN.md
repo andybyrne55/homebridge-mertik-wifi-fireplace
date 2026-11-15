@@ -251,7 +251,8 @@ Debug (config `debug`): raw frames, queue activity, state transitions.
   configurable as `reigniteWait` (30–900 s). The exact threshold between 60 s and 3 min is unknown.
 - ~~Confirm unprompted status pushes with more than one observation.~~ Confirmed 15 Nov (behaviour 13).
 
-- v2: thermostat + eco control, child lock, timers if the protocol has them, Matter, verified application.
+- v2: thermostat + eco control, child lock, verified application. Timers: not in the plugin – use Home app
+  automations (owner, 15 Nov). Matter: undecided.
 - v2 decisions (owner, 15 Nov):
   - Left-on alert: alert by default after 4 h lit (`leftOnAlertHours`, 0 = off), own sensor ("<name> Left On", same
     type as `alertSensor`), clears when the main burner goes out; auto-off opt-in (`leftOnSwitchOff`). Built.

@@ -111,8 +111,10 @@ background.
 
 The two plugins create different accessories, so HomeKit scenes and automations need to be set up again.
 
-1. Disable `homebridge-mertik-fireplace` (or remove its config entry) so only one plugin talks to the fireplace.
-2. Install this plugin and add your fireplace.
+1. Uninstall `homebridge-mertik-fireplace`, or disable it **and** remove its accessory in the Homebridge UI
+   (Settings → Remove single cached accessory). Homebridge can keep publishing a disabled plugin's accessory with its
+   last state frozen, so the old tile would go on showing the fire as on (seen on Homebridge 2.5).
+2. Install this plugin and add your fireplace. The new tile appears in your default room; move it where you want it.
 3. Rebuild your scenes and automations with the new accessory.
 
 ## Protocol notes

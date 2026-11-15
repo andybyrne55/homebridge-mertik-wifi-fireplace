@@ -17,19 +17,21 @@ retried if it did not take effect. If the fire cannot be confirmed off, you get 
 - **On / off, verified.** Off is sent immediately (no debounce), jumps ahead of anything queued, is sent even if
   the plugin believes the fire is already off, and is retried until the fireplace confirms it.
 - **Flame height 0–100 %.** 1–100 % covers the fireplace's whole usable range. Dragging the slider sends one command.
-- **Boost switch:** lights the second (back) row of burners for a bigger fire (the remote calls this "aux"). The
+- **Boost switch** ("Fire Boost"): lights the second (back) row of burners for a bigger fire (the remote calls this "aux"). The
   fireplace jumps to full flame when boost changes; the plugin puts your flame level back.
+- Names above assume your fireplace is called "Fire"; they follow the `name` you set.
 - **The real state in HomeKit**, including changes made with the handset. While a command is running, HomeKit
   shows what you asked for and does not flip back.
-- **Shutdown alert sensor** (contact or leak sensor) that trips **only** when the fire could not be confirmed off
+- **Shutdown alert sensor** ("Fire Shutdown Alert", contact or leak sensor) that trips **only** when the fire could not be confirmed off
   after all retries. It does not trip because the fireplace is merely unreachable while off, and it clears by
   itself once the fire is confirmed off.
-- **Left-on alert:** a second sensor that trips when the fire has been on continuously for 4 hours (configurable),
+- **Left-on alert** ("Fire Left On"): a second sensor that trips when the fire has been on continuously for 4 hours (configurable),
   in case it was forgotten or something is wrong. Optionally switches the fire off too.
-- **Child lock:** a switch that stops HomeKit and automations from lighting the fire or changing it. Switching off
+- **Child lock** ("Fire Child Lock"): a switch that stops HomeKit and automations from lighting the fire or changing it. Switching off
   always works, and the handset is not affected.
 - **Thermostat:** set a target temperature on the Fire tile and the fireplace holds the room at it, lighting and idling
-  the burner by itself. Move the flame slider to go back to manual.
+  the burner by itself. Move the flame slider to go back to manual. A target set while the fire is off is saved
+  for the next switch-on; it never lights the fire.
 - **Clear logs:** one line per event and its outcome ("Ignite requested", "Lit after 38 s", "Off confirmed after
   9 s", "Changed on handset: flame 60 %"). Packet-level logging is available with the `debug` option.
 - No runtime dependencies, no analytics, writes no files.

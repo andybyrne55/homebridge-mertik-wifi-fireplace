@@ -117,7 +117,7 @@
               "description": "The fireplace jumps to full flame whenever boost is switched on or off. When on, the plugin puts your flame level back."
             },
             "alertSensor": {
-              "title": "Shutdown alert sensor",
+              "title": "Alert sensors (shutdown and left-on)",
               "type": "string",
               "default": "contact",
               "oneOf": [
@@ -153,7 +153,8 @@
             "leftOnSwitchOff": {
               "title": "Also switch the fire off when the left-on alert is raised",
               "type": "boolean",
-              "default": false
+              "default": false,
+              "description": "Uses the same verified off as the Home app, with retries and the shutdown alert if it cannot be confirmed."
             },
             "shutOffAfterConnectionLoss": {
               "title": "Switch the fire off after a connection loss",

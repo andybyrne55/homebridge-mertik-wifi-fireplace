@@ -17,7 +17,7 @@ v1 (manual control only):
 - alert when the fire cannot be confirmed off
 - recognises thermostat / eco mode (set from the handset) and reports it, but does not control it
 
-v2 backlog (do not build in v1): thermostat and eco control, child lock, anything needed for parity with
+v2 backlog (do not build in v1): thermostat and eco control, a "left on too long" alert, child lock, anything needed for parity with
 the existing verified plugin, then a Homebridge "verified" application. See §11.
 
 ## 2. Standards (checked against homebridge-plugin-template @ 2026-11-01 and the verified criteria)
@@ -238,3 +238,9 @@ Debug (config `debug`): raw frames, queue activity, state transitions.
 - Cause of the owner's intermittent "off ignored" and "fire switches itself off" with the old plugin is not
   proven (candidates: 10 s debounce + stale state, false-off flag, auto shut-off after connection loss).
 - v2: thermostat + eco control, child lock, timers if the protocol has them, Matter, verified application.
+- v2: "left on too long" alert (owner's request, 15 Nov). A configurable time (e.g. `onAlertHours`, off by default)
+  after which the plugin raises an alert if the main burner has been lit continuously, in case something
+  malfunctions or it was forgotten. To decide: its own sensor or shared with the shutdown alert (keep the two
+  distinguishable in the log either way); whether pilot-only time counts; whether handset or thermostat
+  re-lights restart the clock; whether it may also switch the fire off (opt-in only, never by default);
+  how it clears (fire off, or the user acknowledging it).

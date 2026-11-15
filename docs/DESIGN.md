@@ -1,4 +1,4 @@
-# homebridge-mertik-wifi – design and build spec (v1)
+# homebridge-mertik-wifi-fireplace – design and build spec (v1)
 
 Self-contained hand-off document: everything needed to build v1 is here. All protocol facts below were
 measured on a real Mertik Maxitrol WiFi module (GV60 family, two-burner gas fire) on 14–15 Nov 2026 and,
@@ -17,8 +17,7 @@ v1 (manual control only):
 - alert when the fire cannot be confirmed off
 - recognises thermostat / eco mode (set from the handset) and reports it, but does not control it
 
-v2 backlog (do not build in v1): thermostat and eco control, a "left on too long" alert, child lock, anything needed for parity with
-the existing verified plugin, then a Homebridge "verified" application. See §11.
+v2 backlog (do not build in v1): thermostat and eco control, a "left on too long" alert, child lock, then a Homebridge "verified" application. See §11.
 
 ## 2. Standards (checked against homebridge-plugin-template @ 2026-11-01 and the verified criteria)
 
@@ -121,7 +120,7 @@ Observed flag values: `820A` off (aux on), `821A` igniting, `828A` on + aux on, 
 ```
 src/
   index.ts            registers the platform
-  settings.ts         PLATFORM_NAME = 'MertikWifi', PLUGIN_NAME = 'homebridge-mertik-wifi'
+  settings.ts         PLATFORM_NAME = 'MertikWifiFireplace', PLUGIN_NAME = 'homebridge-mertik-wifi-fireplace'
   platform.ts         config validation, accessory discovery/restore/removal
   accessory.ts        HomeKit services <-> FireplaceController
   protocol/
@@ -179,7 +178,7 @@ One accessory per configured fireplace.
 
 ## 6. Configuration (`config.schema.json`, all with defaults)
 
-Platform: `MertikWifi`. `fireplaces[]`:
+Platform: `MertikWifiFireplace`. `fireplaces[]`:
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -192,7 +191,7 @@ Platform: `MertikWifi`. `fireplaces[]`:
 | `auxSwitch` | true | expose the aux switch |
 | `restoreFlameAfterAux` | true | re-apply flame level after an aux change |
 | `alertSensor` | `contact` | `none` / `contact` / `leak` |
-| `shutOffAfterConnectionLoss` | false | old-plugin behaviour: switch the fire off when contact returns after `connectionLossMinutes` |
+| `shutOffAfterConnectionLoss` | false | switch the fire off when contact returns after `connectionLossMinutes` |
 | `connectionLossMinutes` | 5 | |
 | `pollInterval` | 15 | seconds, 5–60 |
 | `commandRetries` | 3 | 0–5 |
@@ -224,16 +223,16 @@ Debug (config `debug`): raw frames, queue activity, state transitions.
   the first publish of a new package may have to be done once by the owner before a trusted publisher can
   be attached.
 - First release: `0.1.0-beta.1` under the `beta` dist-tag. Repo goes public at that point (owner's approval).
-- README: features, install, config table, HomeKit behaviour, troubleshooting, protocol notes, and credits:
-  "Protocol knowledge builds on tritter/homebridge-mertik-fireplace and erdebee/homey-mertik-wifi" with a
-  polite, factual list of what this plugin does differently. Not affiliated with Maxitrol.
+- README: features, install, config table, HomeKit behaviour, troubleshooting, protocol notes, and a one-line
+  credit to the projects whose protocol work this builds on. No comparisons, and no mention of other plugins
+  anywhere else in the code or docs (owner, 15 Nov). Not affiliated with Maxitrol.
 
 ## 10. Milestones
 
 1. Scaffold from the template + protocol layer + tests.
 2. Connection + controller + fake fireplace + tests.
 3. HomeKit accessory + config schema.
-4. Real-hardware test on the owner's Homebridge (needs owner's OK: install on the Pi, disable the old plugin).
+4. Real-hardware test on the owner's Homebridge (needs owner's OK: install on the Pi).
 5. README, CI, release workflow.
 6. Publish `0.1.0-beta.1` (needs owner: npm account, OK to make the repo public, OK to publish).
 
@@ -246,8 +245,6 @@ Debug (config `debug`): raw frames, queue activity, state transitions.
   configurable as `reigniteWait` (30–900 s). The exact threshold between 60 s and 3 min is unknown.
 - ~~Confirm unprompted status pushes with more than one observation.~~ Confirmed 15 Nov (behaviour 13).
 
-- Cause of the owner's intermittent "off ignored" and "fire switches itself off" with the old plugin is not
-  proven (candidates: 10 s debounce + stale state, false-off flag, auto shut-off after connection loss).
 - v2: thermostat + eco control, child lock, timers if the protocol has them, Matter, verified application.
 - v2: "left on too long" alert (owner's request, 15 Nov). A configurable time (e.g. `onAlertHours`, off by default)
   after which the plugin raises an alert if the main burner has been lit continuously, in case something

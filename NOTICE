@@ -1,11 +1,7 @@
-homebridge-mertik-wifi
+homebridge-mertik-wifi-fireplace
 Copyright 2026 Andrew Byrne
 
 This product is licensed under the Apache License, Version 2.0 (see LICENSE).
-
-Protocol knowledge builds on tritter/homebridge-mertik-fireplace and erdebee/homey-mertik-wifi.
-No code from those projects is included. All protocol details used here were re-measured on a real
-Mertik Maxitrol WiFi module (see docs/DESIGN.md).
 
 Not affiliated with, endorsed by or supported by Maxitrol or Mertik Maxitrol GmbH & Co. KG.
 "Mertik" and "Maxitrol" are trademarks of their respective owners.

@@ -1,5 +1,5 @@
 {
-  "pluginAlias": "MertikWifi",
+  "pluginAlias": "MertikWifiFireplace",
   "pluginType": "platform",
   "singular": true,
   "strictValidation": false,
@@ -11,14 +11,21 @@
       "name": {
         "title": "Platform name",
         "type": "string",
-        "default": "Mertik WiFi"
+        "default": "Mertik WiFi Fireplace"
       },
       "fireplaces": {
         "title": "Fireplaces",
         "type": "array",
         "items": {
           "type": "object",
-          "required": ["name", "ip"],
+          "required": [
+            "name",
+            "ip",
+            "tileType",
+            "zeroPercent",
+            "igniteLevel",
+            "alertSensor"
+          ],
           "properties": {
             "name": {
               "title": "Name",
@@ -44,8 +51,18 @@
               "type": "string",
               "default": "heater",
               "oneOf": [
-                { "title": "Heater (on/off, flame as speed, room temperature)", "enum": ["heater"] },
-                { "title": "Fan (on/off, flame as speed)", "enum": ["fan"] }
+                {
+                  "title": "Heater (on/off, flame as speed, room temperature)",
+                  "enum": [
+                    "heater"
+                  ]
+                },
+                {
+                  "title": "Fan (on/off, flame as speed)",
+                  "enum": [
+                    "fan"
+                  ]
+                }
               ],
               "description": "Never a light bulb, so \"turn off all the lights\" scenes cannot touch the fire."
             },
@@ -54,8 +71,18 @@
               "type": "string",
               "default": "off",
               "oneOf": [
-                { "title": "Switch the fire off", "enum": ["off"] },
-                { "title": "Standby (pilot only)", "enum": ["pilot"] }
+                {
+                  "title": "Switch the fire off",
+                  "enum": [
+                    "off"
+                  ]
+                },
+                {
+                  "title": "Standby (pilot only)",
+                  "enum": [
+                    "pilot"
+                  ]
+                }
               ]
             },
             "igniteLevel": {
@@ -81,9 +108,24 @@
               "type": "string",
               "default": "contact",
               "oneOf": [
-                { "title": "None", "enum": ["none"] },
-                { "title": "Contact sensor (opens on alert)", "enum": ["contact"] },
-                { "title": "Leak sensor (critical notification)", "enum": ["leak"] }
+                {
+                  "title": "None (no alert sensor)",
+                  "enum": [
+                    "none"
+                  ]
+                },
+                {
+                  "title": "Contact sensor (opens on alert)",
+                  "enum": [
+                    "contact"
+                  ]
+                },
+                {
+                  "title": "Leak sensor (critical notification)",
+                  "enum": [
+                    "leak"
+                  ]
+                }
               ],
               "description": "Trips only when the fire could not be confirmed off after all retries. Never for mere unreachability. Clears when the fire is confirmed off."
             },
@@ -91,7 +133,7 @@
               "title": "Switch the fire off after a connection loss",
               "type": "boolean",
               "default": false,
-              "description": "Old-plugin behaviour: when contact returns after the time below, switch the fire off."
+              "description": "When contact with the fireplace returns after at least the time below, switch the fire off."
             },
             "connectionLossMinutes": {
               "title": "Connection loss time (minutes)",

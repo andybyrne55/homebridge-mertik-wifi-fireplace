@@ -10,7 +10,7 @@ import type { FireplaceConfig } from './config.js';
 import { Connection } from './connection.js';
 import { FireplaceController, type FireplaceView } from './controller.js';
 import { FireplaceLogger, type LogSink } from './logger.js';
-import type { MertikWifiPlatform } from './platform.js';
+import type { MertikWifiFireplacePlatform } from './platform.js';
 import { percentToByte } from './protocol/flame.js';
 
 type CharacteristicType = WithUUID<new () => Characteristic>;
@@ -25,7 +25,7 @@ export class FireplaceAccessory {
   private lastReachable?: boolean;
 
   constructor(
-    private readonly platform: MertikWifiPlatform,
+    private readonly platform: MertikWifiFireplacePlatform,
     private readonly accessory: PlatformAccessory,
     private readonly config: FireplaceConfig,
     sink: LogSink,

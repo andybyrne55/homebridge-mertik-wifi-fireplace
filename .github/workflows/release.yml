@@ -5,8 +5,8 @@
 #
 # One-time setup (owner):
 #  1. Publish the very first version by hand (trusted publishing can only be attached to an existing package).
-#  2. On npmjs.com > homebridge-mertik-wifi > Settings > Trusted publishing, add GitHub Actions:
-#     owner andybyrne55, repository homebridge-mertik-wifi, workflow release.yml, environment npm.
+#  2. On npmjs.com > homebridge-mertik-wifi-fireplace > Settings > Trusted publishing, add GitHub Actions:
+#     owner andybyrne55, repository homebridge-mertik-wifi-fireplace, workflow release.yml, environment npm.
 #     Configurations created after 3 Sep 2026 default to staged publishing; tick direct publishing too,
 #     or change NPM_PUBLISH_COMMAND below to "stage publish" and approve each release with 2FA.
 #  3. Complete one publish through this workflow within 2 days, or the configuration expires.
@@ -82,7 +82,7 @@ jobs:
 
       - name: Publish to npm (skipped if this version is already published)
         run: |
-          if npm view "homebridge-mertik-wifi@${{ steps.version.outputs.version }}" version >/dev/null 2>&1; then
+          if npm view "homebridge-mertik-wifi-fireplace@${{ steps.version.outputs.version }}" version >/dev/null 2>&1; then
             echo "Version ${{ steps.version.outputs.version }} is already on npm; skipping publish."
           else
             npm $NPM_PUBLISH_COMMAND --access public --provenance --tag ${{ steps.version.outputs.dist_tag }}

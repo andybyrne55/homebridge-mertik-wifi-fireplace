@@ -8,12 +8,18 @@ import { FireplaceAccessory } from './accessory.js';
 import { validateFireplace, type FireplaceConfig } from './config.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 
+/**
+ * Seed for accessory UUIDs. Never change it: HomeKit identifies the accessory (room, scenes, automations) by this UUID.
+ * It predates the package rename, which is why it differs from PLUGIN_NAME.
+ */
+const ACCESSORY_ID_SEED = 'homebridge-mertik-wifi';
+
 interface AccessoryContext {
   ip?: string;
   port?: number;
 }
 
-export class MertikWifiPlatform implements DynamicPlatformPlugin {
+export class MertikWifiFireplacePlatform implements DynamicPlatformPlugin {
   readonly Service: typeof Service;
   readonly Characteristic: typeof Characteristic;
 
@@ -72,7 +78,7 @@ export class MertikWifiPlatform implements DynamicPlatformPlugin {
 
     const keep = new Set<string>();
     for (const config of configs) {
-      const uuid = this.api.hap.uuid.generate(`${PLUGIN_NAME}:${config.ip}:${config.port}`);
+      const uuid = this.api.hap.uuid.generate(`${ACCESSORY_ID_SEED}:${config.ip}:${config.port}`);
       keep.add(uuid);
       let accessory = this.cached.get(uuid);
       const isNew = !accessory;

@@ -1,7 +1,7 @@
-# homebridge-mertik-wifi
+# homebridge-mertik-wifi-fireplace
 
-[![Build, lint and test](https://github.com/andybyrne55/homebridge-mertik-wifi/actions/workflows/build.yml/badge.svg)](https://github.com/andybyrne55/homebridge-mertik-wifi/actions/workflows/build.yml)
-[![npm](https://img.shields.io/npm/v/homebridge-mertik-wifi/beta)](https://www.npmjs.com/package/homebridge-mertik-wifi)
+[![Build, lint and test](https://github.com/andybyrne55/homebridge-mertik-wifi-fireplace/actions/workflows/build.yml/badge.svg)](https://github.com/andybyrne55/homebridge-mertik-wifi-fireplace/actions/workflows/build.yml)
+[![npm](https://img.shields.io/npm/v/homebridge-mertik-wifi-fireplace/beta)](https://www.npmjs.com/package/homebridge-mertik-wifi-fireplace)
 
 HomeKit control for gas fireplaces with a **Mertik Maxitrol WiFi module** (GV60 family), through [Homebridge](https://homebridge.io).
 
@@ -38,13 +38,13 @@ retried if it did not take effect. If the fire cannot be confirmed off, you get 
 
 ## Installation
 
-Search for **Mertik WiFi** in the Homebridge UI plugins tab, or:
+Search for **Mertik WiFi Fireplace** in the Homebridge UI plugins tab, or:
 
 ```sh
-npm install -g homebridge-mertik-wifi@beta
+npm install -g homebridge-mertik-wifi-fireplace@beta
 ```
 
-If you used `homebridge-mertik-fireplace` before, disable it first (see [Migrating](#migrating-from-homebridge-mertik-fireplace)).
+If another plugin controlled your fireplace before, remove it first (see [Troubleshooting](#troubleshooting)).
 
 ## Configuration
 
@@ -52,8 +52,8 @@ Use the plugin's settings in the Homebridge UI, or add this to `config.json`:
 
 ```json
 {
-  "platform": "MertikWifi",
-  "name": "Mertik WiFi",
+  "platform": "MertikWifiFireplace",
+  "name": "Mertik WiFi Fireplace",
   "fireplaces": [
     { "name": "Living Room Fire", "ip": "192.168.1.101" }
   ]
@@ -107,17 +107,10 @@ background.
   stay lit. The plugin does not retry automatically. Check the gas supply and try the handset.
 - **"Off NOT confirmed".** The fireplace did not confirm the off after all retries. Check the fire and use the
   handset. The alert sensor clears itself as soon as the fire is confirmed off.
+- **Two Fire tiles, or a tile stuck showing the fire on.** If another plugin controlled the fireplace before, uninstall it,
+  or disable it and remove its accessory (Homebridge UI → Settings → Remove single cached accessory). Homebridge can keep
+  showing a disabled plugin's accessory with its last state frozen. Rebuild scenes and automations with the new tile.
 - **Something else.** Turn on `debug` for the fireplace, reproduce the problem and open an issue with the log.
-
-## Migrating from homebridge-mertik-fireplace
-
-The two plugins create different accessories, so HomeKit scenes and automations need to be set up again.
-
-1. Uninstall `homebridge-mertik-fireplace`, or disable it **and** remove its accessory in the Homebridge UI
-   (Settings → Remove single cached accessory). Homebridge can keep publishing a disabled plugin's accessory with its
-   last state frozen, so the old tile would go on showing the fire as on (seen on Homebridge 2.5).
-2. Install this plugin and add your fireplace. The new tile appears in your default room; move it where you want it.
-3. Rebuild your scenes and automations with the new accessory.
 
 ## Protocol notes
 
@@ -152,20 +145,8 @@ npm test        # protocol tests on captured frames + controller tests against a
 
 ## Credits
 
-Protocol knowledge builds on [tritter/homebridge-mertik-fireplace](https://github.com/tritter/homebridge-mertik-fireplace)
-and [erdebee/homey-mertik-wifi](https://github.com/erdebee/homey-mertik-wifi). Thank you to both authors: their
-work made this possible. This is a new implementation; no code is shared.
-
-What this plugin does differently from homebridge-mertik-fireplace:
-
-- Reads the actual flame height and aux state from the fireplace and shows them in HomeKit.
-- Uses the full flame range (any value from `80` to `FF`) instead of a fixed set of steps.
-- Verifies every command from status and retries it if it did not take effect.
-- Sends off immediately, ahead of anything else, instead of after a debounce delay.
-- Does not treat a dropped pilot-flame bit after a turn-down as "off".
-- The alert sensor trips only on a confirmed shutdown failure.
-- Switching the fire off after a connection loss is optional and off by default.
-- homebridge-mertik-fireplace supports thermostat and eco control, which this plugin does not have yet.
+Thanks to [tritter/homebridge-mertik-fireplace](https://github.com/tritter/homebridge-mertik-fireplace) and
+[erdebee/homey-mertik-wifi](https://github.com/erdebee/homey-mertik-wifi), whose protocol work this plugin builds on.
 
 ## Disclaimer
 

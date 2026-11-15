@@ -1,18 +1,18 @@
 {
-  "name": "homebridge-mertik-wifi",
+  "name": "homebridge-mertik-wifi-fireplace",
   "displayName": "Mertik WiFi Fireplace",
   "type": "module",
   "version": "0.1.0-beta.1",
   "description": "Reliable HomeKit control for Mertik Maxitrol WiFi gas fireplaces: verified on/off, flame height, aux burner and a shutdown-failure alert.",
   "author": "Andrew Byrne",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/andybyrne55/homebridge-mertik-wifi#readme",
+  "homepage": "https://github.com/andybyrne55/homebridge-mertik-wifi-fireplace#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andybyrne55/homebridge-mertik-wifi.git"
+    "url": "git+https://github.com/andybyrne55/homebridge-mertik-wifi-fireplace.git"
   },
   "bugs": {
-    "url": "https://github.com/andybyrne55/homebridge-mertik-wifi/issues"
+    "url": "https://github.com/andybyrne55/homebridge-mertik-wifi-fireplace/issues"
   },
   "keywords": [
     "homebridge-plugin",

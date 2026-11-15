@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. This project uses [semantic versioning](https://semver.org).
 
+## [Unreleased]
+
+### Added
+- Left-on alert: a sensor that trips when the fire has been lit continuously for `leftOnAlertHours` (default 4),
+  with optional auto-off (`leftOnSwitchOff`).
+- Child lock switch: blocks HomeKit from lighting or changing the fire; off always works.
+
 ## [0.1.0-beta.1]
 
 First public beta. Manual control only.

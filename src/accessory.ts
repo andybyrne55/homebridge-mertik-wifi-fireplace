@@ -22,6 +22,8 @@ export class FireplaceAccessory {
   private readonly main: Service;
   private readonly auxService?: Service;
   private readonly alertService?: Service;
+  private readonly leftOnService?: Service;
+  private readonly lockService?: Service;
   private lastReachable?: boolean;
 
   constructor(
@@ -39,6 +41,8 @@ export class FireplaceAccessory {
       restoreFlameAfterAux: config.restoreFlameAfterAux,
       shutOffAfterConnectionLoss: config.shutOffAfterConnectionLoss,
       connectionLossMinutes: config.connectionLossMinutes,
+      leftOnAlertMs: config.leftOnAlertHours * 3_600_000,
+      leftOnSwitchOff: config.leftOnSwitchOff,
     }, { reigniteLockoutMs: config.reigniteWait * 1000 });
 
     accessory.getService(S.AccessoryInformation)!
@@ -62,6 +66,7 @@ export class FireplaceAccessory {
     this.main.getCharacteristic(C.Active)
       .onGet(() => this.read((v) => (v.power === 'off' ? C.Active.INACTIVE : C.Active.ACTIVE)))
       .onSet((value) => this.write('Active', () => {
+        this.checkLock(value === C.Active.ACTIVE, 'switching the fire on');
         if (value === C.Active.ACTIVE) {
           void this.controller.requestOn();
         } else {
@@ -72,7 +77,10 @@ export class FireplaceAccessory {
     this.main.getCharacteristic(C.RotationSpeed)
       .setProps({ minValue: 0, maxValue: 100, minStep: 1 })
       .onGet(() => this.read((v) => v.flamePercent))
-      .onSet((value) => this.write('RotationSpeed', () => this.setFlamePercent(value)));
+      .onSet((value) => this.write('RotationSpeed', () => {
+        this.checkLock(Number(value) > 0, 'changing the flame');
+        this.setFlamePercent(value);
+      }));
 
     if (heater) {
       this.main.getCharacteristic(C.CurrentHeaterCoolerState)
@@ -91,7 +99,10 @@ export class FireplaceAccessory {
     this.auxService = this.optionalService(S.Switch, 'aux', config.auxSwitch, `${config.name} Aux`);
     this.auxService?.getCharacteristic(C.On)
       .onGet(() => this.read((v) => v.aux))
-      .onSet((value) => this.write('Aux', () => void this.controller.requestAux(value === true)));
+      .onSet((value) => this.write('Aux', () => {
+        this.checkLock(true, 'switching aux');
+        void this.controller.requestAux(value === true);
+      }));
 
     // ---- shutdown alert sensor (trips only on a confirmed shutdown failure)
     const wantContact = config.alertSensor === 'contact';
@@ -103,6 +114,26 @@ export class FireplaceAccessory {
       .onGet(() => (this.controller.view.alert ? C.ContactSensorState.CONTACT_NOT_DETECTED : C.ContactSensorState.CONTACT_DETECTED));
     leak?.getCharacteristic(C.LeakDetected)
       .onGet(() => (this.controller.view.alert ? C.LeakDetected.LEAK_DETECTED : C.LeakDetected.LEAK_NOT_DETECTED));
+
+    // ---- left-on alert sensor (same sensor type as the shutdown alert)
+    const wantLeftOn = config.leftOnAlertHours > 0;
+    const leftOnContact = this.optionalService(S.ContactSensor, 'leftOn', wantContact && wantLeftOn, `${config.name} Left On`);
+    const leftOnLeak = this.optionalService(S.LeakSensor, 'leftOn', wantLeak && wantLeftOn, `${config.name} Left On`);
+    this.leftOnService = leftOnContact ?? leftOnLeak;
+    leftOnContact?.getCharacteristic(C.ContactSensorState)
+      .onGet(() => (this.controller.view.leftOnAlert ? C.ContactSensorState.CONTACT_NOT_DETECTED : C.ContactSensorState.CONTACT_DETECTED));
+    leftOnLeak?.getCharacteristic(C.LeakDetected)
+      .onGet(() => (this.controller.view.leftOnAlert ? C.LeakDetected.LEAK_DETECTED : C.LeakDetected.LEAK_NOT_DETECTED));
+
+    // ---- child lock: blocks HomeKit from lighting the fire or changing it; off always works
+    this.lockService = this.optionalService(S.Switch, 'childLock', config.childLockSwitch, `${config.name} Child Lock`);
+    this.lockService?.getCharacteristic(C.On)
+      .onGet(() => this.locked)
+      .onSet((value) => this.write('Child lock', () => {
+        this.accessory.context.childLock = value === true;
+        this.platform.api.updatePlatformAccessories([this.accessory]);
+        this.log.info(`Child lock ${value === true ? 'on' : 'off'}`);
+      }));
 
     this.controller.on('update', (view: FireplaceView) => this.refresh(view));
   }
@@ -131,10 +162,26 @@ export class FireplaceAccessory {
     void this.controller.requestFlame(percentToByte(pct));
   }
 
+  private get locked(): boolean {
+    return this.config.childLockSwitch && this.accessory.context.childLock === true;
+  }
+
+  /** Refuse a HomeKit command that would light the fire or change it while the child lock is on. */
+  private checkLock(blockedAction: boolean, what: string): void {
+    if (blockedAction && this.locked) {
+      this.log.warn(`Child lock is on: ${what} from HomeKit was refused`);
+      setTimeout(() => this.refresh(this.controller.view, true), 50);
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.NOT_ALLOWED_IN_CURRENT_STATE);
+    }
+  }
+
   private write(what: string, fn: () => void): void {
     try {
       fn();
     } catch (err) {
+      if (err instanceof this.platform.api.hap.HapStatusError) {
+        throw err;
+      }
       this.log.error(`Internal error handling ${what}: ${String(err)}`);
     }
   }
@@ -162,10 +209,10 @@ export class FireplaceAccessory {
     return t === undefined || !Number.isFinite(t) ? 0 : Math.max(0, Math.min(100, t));
   }
 
-  private refresh(view: FireplaceView): void {
+  private refresh(view: FireplaceView, force = false): void {
     try {
       const C = this.platform.Characteristic;
-      const recovered = view.reachable && this.lastReachable === false;
+      const recovered = force || (view.reachable && this.lastReachable === false);
       if (!view.reachable && !view.busy && view.known && this.lastReachable !== false) {
         const error = new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
         this.main.updateCharacteristic(C.Active, error);
@@ -189,6 +236,17 @@ export class FireplaceAccessory {
         } else {
           this.set(this.alertService, C.LeakDetected, view.alert ? C.LeakDetected.LEAK_DETECTED : C.LeakDetected.LEAK_NOT_DETECTED, recovered);
         }
+      }
+      if (this.leftOnService) {
+        if (this.config.alertSensor === 'contact') {
+          this.set(this.leftOnService, C.ContactSensorState,
+            view.leftOnAlert ? C.ContactSensorState.CONTACT_NOT_DETECTED : C.ContactSensorState.CONTACT_DETECTED, recovered);
+        } else {
+          this.set(this.leftOnService, C.LeakDetected, view.leftOnAlert ? C.LeakDetected.LEAK_DETECTED : C.LeakDetected.LEAK_NOT_DETECTED, recovered);
+        }
+      }
+      if (this.lockService) {
+        this.set(this.lockService, C.On, this.locked, recovered);
       }
     } catch (err) {
       this.log.error(`Internal error updating HomeKit: ${String(err)}`);

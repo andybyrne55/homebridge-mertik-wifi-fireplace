@@ -246,7 +246,15 @@ Debug (config `debug`): raw frames, queue activity, state transitions.
 - ~~Confirm unprompted status pushes with more than one observation.~~ Confirmed 15 Nov (behaviour 13).
 
 - v2: thermostat + eco control, child lock, timers if the protocol has them, Matter, verified application.
-- v2: "left on too long" alert (owner's request, 15 Nov). A configurable time (e.g. `onAlertHours`, off by default)
+- v2 decisions (owner, 15 Nov):
+  - Left-on alert: alert by default after 4 h lit (`leftOnAlertHours`, 0 = off), own sensor ("<name> Left On", same
+    type as `alertSensor`), clears when the main burner goes out; auto-off opt-in (`leftOnSwitchOff`). Built.
+  - Child lock: a switch; while on, HomeKit/automations cannot ignite, change flame or aux; off (and 0 %) always
+    allowed. Software only – the fireplace has no lock in its protocol. State persisted in the accessory context. Built.
+  - Thermostat: setting the target temperature (HeatingThresholdTemperature) puts the fire in thermostat mode;
+    moving the flame slider returns to manual. Last touched wins. Needs the idle-vs-pilot question resolved first.
+  - Eco: an Eco switch; any flame change returns to manual.
+- v2 (original note): "left on too long" alert (owner's request, 15 Nov). A configurable time (e.g. `onAlertHours`, off by default)
   after which the plugin raises an alert if the main burner has been lit continuously, in case something
   malfunctions or it was forgotten. To decide: its own sensor or shared with the shutdown alert (keep the two
   distinguishable in the log either way); whether pilot-only time counts; whether handset or thermostat

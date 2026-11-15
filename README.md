@@ -24,6 +24,10 @@ retried if it did not take effect. If the fire cannot be confirmed off, you get 
 - **Shutdown alert sensor** (contact or leak sensor) that trips **only** when the fire could not be confirmed off
   after all retries. It does not trip because the fireplace is merely unreachable while off, and it clears by
   itself once the fire is confirmed off.
+- **Left-on alert:** a second sensor that trips when the fire has been lit continuously for 4 hours (configurable),
+  in case it was forgotten or something is wrong. Optionally switches the fire off too.
+- **Child lock:** a switch that stops HomeKit and automations from lighting the fire or changing it. Switching off
+  always works, and the handset is not affected.
 - **Thermostat and eco mode** set on the handset are recognised and logged. Controlling them is planned for a
   later version.
 - **Clear logs:** one line per event and its outcome ("Ignite requested", "Lit after 38 s", "Off confirmed after
@@ -71,6 +75,9 @@ Use the plugin's settings in the Homebridge UI, or add this to `config.json`:
 | `auxSwitch` | `true` | Show a switch for the second burner row. |
 | `restoreFlameAfterAux` | `true` | Put the flame back after an aux change (the fireplace resets it to full). |
 | `alertSensor` | `contact` | Shutdown alert: `none`, `contact` (opens on alert) or `leak` (leak detected on alert). |
+| `leftOnAlertHours` | `4` | Raise the left-on alert after the fire has been lit continuously this long (hours, 0 = off). Same sensor type as `alertSensor`. |
+| `leftOnSwitchOff` | `false` | Also switch the fire off when the left-on alert is raised. |
+| `childLockSwitch` | `true` | Show the child lock switch. |
 | `shutOffAfterConnectionLoss` | `false` | When contact returns after a loss of at least `connectionLossMinutes`, switch the fire off. |
 | `connectionLossMinutes` | `5` | See above. |
 | `pollInterval` | `15` | Seconds between status checks when idle (5–60). While a command is checked, the plugin polls every 2 s. |

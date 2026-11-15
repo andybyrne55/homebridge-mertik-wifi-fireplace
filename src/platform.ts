@@ -17,6 +17,8 @@ const ACCESSORY_ID_SEED = 'homebridge-mertik-wifi';
 interface AccessoryContext {
   ip?: string;
   port?: number;
+  /** Child lock state, persisted with the cached accessory. */
+  childLock?: boolean;
 }
 
 export class MertikWifiFireplacePlatform implements DynamicPlatformPlugin {

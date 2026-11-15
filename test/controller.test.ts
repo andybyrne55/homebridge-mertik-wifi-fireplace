@@ -36,6 +36,7 @@ const FAST_CTRL: Partial<ControllerTiming> = {
   firstContactWarnMs: 5_000,
   transientRecheckMs: 150,
   unknownStateWaitMs: 500,
+  leftOnCheckMs: 50,
 };
 
 const DEFAULT_OPTIONS: ControllerOptions = {
@@ -487,5 +488,41 @@ describe('real-hardware regressions', () => {
     }
     const sent = fake.received.filter((c) => c.startsWith('16')).map((c) => c.substring(2));
     assert.deepEqual(sent, ['D9', 'D9', 'D9', 'D9', 'D9'], 'always restores the level that was asked for');
+  });
+});
+
+describe('left-on alert', () => {
+  it('raises after the fire has been lit continuously, clears when it goes out', async () => {
+    const { ctrl, fake, logs } = await setup((f) => f.setOn(0xc0), { leftOnAlertMs: 600 });
+    let raised = 0;
+    ctrl.on('leftOn', () => raised++);
+    assert.equal(ctrl.view.leftOnAlert, false);
+    await waitUntil(() => ctrl.view.leftOnAlert, 2_000, 'left-on alert');
+    assert.equal(raised, 1);
+    assert.ok(has(logs, 'left-on alert raised'));
+    assert.equal(fake.count('10'), 0, 'does not switch off by default');
+    fake.handsetOff();
+    await waitUntil(() => !ctrl.view.leftOnAlert, 2_000, 'cleared');
+    assert.ok(has(logs, 'left-on alert cleared'));
+  });
+
+  it('flame changes do not restart the clock; a turn-off does', async () => {
+    const { ctrl } = await setup((f) => f.setOn(0xc0), { leftOnAlertMs: 900 });
+    await sleep(500);
+    assert.equal(await ctrl.requestFlame(0x90), true);
+    await waitUntil(() => ctrl.view.leftOnAlert, 1_500, 'alert despite the flame change');
+  });
+
+  it('optionally switches the fire off', async () => {
+    const { ctrl, fake, logs } = await setup((f) => f.setOn(0xc0), { leftOnAlertMs: 400, leftOnSwitchOff: true });
+    await waitUntil(() => fake.count('10') > 0, 2_000, 'auto-off sent');
+    await waitUntil(() => ctrl.lastStatus?.state === 'off', 2_000, 'off');
+    assert.ok(has(logs, 'left-on auto-off is enabled'));
+  });
+
+  it('is off when leftOnAlertMs is 0', async () => {
+    const { ctrl } = await setup((f) => f.setOn(0xc0), { leftOnAlertMs: 0 });
+    await sleep(500);
+    assert.equal(ctrl.view.leftOnAlert, false);
   });
 });

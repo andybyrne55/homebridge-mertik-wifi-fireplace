@@ -26,6 +26,9 @@ export interface FireplaceConfig {
   pollInterval: number;
   commandRetries: number;
   reigniteWait: number;
+  leftOnAlertHours: number;
+  leftOnSwitchOff: boolean;
+  childLockSwitch: boolean;
   debug: boolean;
 }
 
@@ -42,6 +45,9 @@ export const CONFIG_DEFAULTS = {
   pollInterval: 15,
   commandRetries: 3,
   reigniteWait: 180,
+  leftOnAlertHours: 4,
+  leftOnSwitchOff: false,
+  childLockSwitch: true,
   debug: false,
 };
 
@@ -150,6 +156,9 @@ export function validateFireplace(raw: unknown): ValidationResult {
     pollInterval: int('pollInterval', CONFIG_DEFAULTS.pollInterval, 5, 60),
     commandRetries: int('commandRetries', CONFIG_DEFAULTS.commandRetries, 0, 5),
     reigniteWait: int('reigniteWait', CONFIG_DEFAULTS.reigniteWait, 30, 900),
+    leftOnAlertHours: raw.leftOnAlertHours === 0 || raw.leftOnAlertHours === '0' ? 0 : num('leftOnAlertHours', CONFIG_DEFAULTS.leftOnAlertHours, 0, 24),
+    leftOnSwitchOff: bool('leftOnSwitchOff', CONFIG_DEFAULTS.leftOnSwitchOff),
+    childLockSwitch: bool('childLockSwitch', CONFIG_DEFAULTS.childLockSwitch),
     debug: bool('debug', CONFIG_DEFAULTS.debug),
   };
 

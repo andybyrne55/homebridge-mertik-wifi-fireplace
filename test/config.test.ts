@@ -13,11 +13,13 @@ describe('config validation', () => {
     const { config } = validateFireplace({
       name: 'Fire', ip: 'fire.local', port: 2001, tileType: 'fan', zeroPercent: 'pilot', igniteLevel: '60',
       auxSwitch: false, restoreFlameAfterAux: false, alertSensor: 'leak', shutOffAfterConnectionLoss: true,
-      connectionLossMinutes: 10, pollInterval: 30, commandRetries: 5, debug: true,
+      connectionLossMinutes: 10, pollInterval: 30, commandRetries: 5, debug: true, leftOnAlertHours: 0, childLockSwitch: false,
     });
     assert.equal(config?.igniteLevel, 60);
     assert.equal(config?.tileType, 'fan');
     assert.equal(config?.alertSensor, 'leak');
+    assert.equal(config?.leftOnAlertHours, 0);
+    assert.equal(config?.childLockSwitch, false);
   });
   it('rejects bad entries with readable errors and never throws', () => {
     assert.ok(validateFireplace(null).errors.length);

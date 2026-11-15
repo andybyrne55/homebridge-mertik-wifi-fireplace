@@ -22,6 +22,10 @@ export interface ControllerOptions {
   restoreFlameAfterAux: boolean;
   shutOffAfterConnectionLoss: boolean;
   connectionLossMinutes: number;
+  /** Raise the left-on alert after the main burner has been lit continuously this long. 0 = off. */
+  leftOnAlertMs?: number;
+  /** Also switch the fire off when the left-on alert is raised. */
+  leftOnSwitchOff?: boolean;
 }
 
 export interface ControllerTiming {
@@ -41,6 +45,7 @@ export interface ControllerTiming {
   firstContactWarnMs: number;
   transientRecheckMs: number;
   unknownStateWaitMs: number;
+  leftOnCheckMs: number;
 }
 
 export const DEFAULT_CONTROLLER_TIMING: ControllerTiming = {
@@ -61,6 +66,7 @@ export const DEFAULT_CONTROLLER_TIMING: ControllerTiming = {
   firstContactWarnMs: 60_000,
   transientRecheckMs: 3_000,
   unknownStateWaitMs: 10_000,
+  leftOnCheckMs: 30_000,
 };
 
 type Command =
@@ -104,12 +110,24 @@ export interface FireplaceView {
   busy: boolean;
   /** Off could not be confirmed. Cleared when the fire is confirmed off. */
   alert: boolean;
+  /** Lit continuously for longer than the left-on time. Cleared when the main burner goes out. */
+  leftOnAlert: boolean;
 }
 
 type Category = 'off' | 'pilot' | 'igniting' | 'on';
 
 function category(state: FireState): Category {
   return state === 'shuttingDown' ? 'off' : state;
+}
+
+function formatDuration(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 60) {
+    return `${minutes} min`;
+  }
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m ? `${h} h ${m} min` : `${h} h`;
 }
 
 function hexByte(b: number): string {
@@ -128,6 +146,9 @@ export class FireplaceController extends EventEmitter {
   private everReachable = false;
   private shutOffOnNextStatus = false;
   private alert = false;
+  private litSince?: number;
+  private leftOnAlert = false;
+  private leftOnTimer?: NodeJS.Timeout;
 
   private queue: QueueItem[] = [];
   private current?: QueueItem;
@@ -153,6 +174,9 @@ export class FireplaceController extends EventEmitter {
     this.timing = { ...DEFAULT_CONTROLLER_TIMING, ...timing };
     link.on('status', (status) => this.guard('status', () => this.onStatus(status)));
     link.on('reachable', (reachable) => this.guard('reachable', () => this.onReachable(reachable)));
+    if ((options.leftOnAlertMs ?? 0) > 0) {
+      this.leftOnTimer = setInterval(() => this.guard('left-on', () => this.checkLeftOn()), this.timing.leftOnCheckMs);
+    }
     this.later(this.timing.firstContactWarnMs, () => {
       if (!this.everReachable) {
         this.log.warn('Unreachable: no reply from the fireplace yet (check the IP address and that the WiFi module is powered)');
@@ -213,6 +237,7 @@ export class FireplaceController extends EventEmitter {
       roomTemperature: s?.roomTemperature,
       busy: this.busy,
       alert: this.alert,
+      leftOnAlert: this.leftOnAlert,
     };
   }
 
@@ -296,6 +321,7 @@ export class FireplaceController extends EventEmitter {
 
   stop(): void {
     this.stopped = true;
+    clearInterval(this.leftOnTimer);
     for (const t of this.timers) {
       clearTimeout(t);
     }
@@ -328,6 +354,8 @@ export class FireplaceController extends EventEmitter {
     if (s.shuttingDown || (s.state === 'off' && prev && prev.state !== 'off' && prev.state !== 'shuttingDown')) {
       this.lastShutdownAt = now;
     }
+
+    this.trackLitTime(s, now);
 
     if (this.alert && s.state === 'off') {
       this.alert = false;
@@ -362,6 +390,39 @@ export class FireplaceController extends EventEmitter {
       if (match) {
         waiter.done(true);
       }
+    }
+    this.emitUpdate();
+  }
+
+  private trackLitTime(s: FireplaceStatus, now: number): void {
+    if (s.state === 'on') {
+      if (this.litSince === undefined) {
+        this.litSince = now;
+      }
+      this.checkLeftOn();
+      return;
+    }
+    if (s.state === 'igniting') {
+      return;
+    }
+    this.litSince = undefined;
+    if (this.leftOnAlert) {
+      this.leftOnAlert = false;
+      this.log.info('Main burner is out – left-on alert cleared');
+    }
+  }
+
+  private checkLeftOn(): void {
+    const limit = this.options.leftOnAlertMs ?? 0;
+    if (limit <= 0 || this.litSince === undefined || this.leftOnAlert || Date.now() - this.litSince < limit) {
+      return;
+    }
+    this.leftOnAlert = true;
+    this.log.warn(`The fire has been lit for ${formatDuration(Date.now() - this.litSince)} – left-on alert raised`);
+    this.emit('leftOn');
+    if (this.options.leftOnSwitchOff) {
+      this.log.warn('Switching the fire off (left-on auto-off is enabled)');
+      void this.requestOff();
     }
     this.emitUpdate();
   }

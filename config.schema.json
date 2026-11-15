@@ -97,6 +97,12 @@
               "type": "boolean",
               "default": true
             },
+            "childLockSwitch": {
+              "title": "Show the child lock switch",
+              "type": "boolean",
+              "default": true,
+              "description": "When the lock is on, HomeKit and automations cannot light the fire or change it. Switching off always works. The handset is not affected."
+            },
             "restoreFlameAfterAux": {
               "title": "Restore the flame level after an aux change",
               "type": "boolean",
@@ -128,6 +134,19 @@
                 }
               ],
               "description": "Trips only when the fire could not be confirmed off after all retries. Never for mere unreachability. Clears when the fire is confirmed off."
+            },
+            "leftOnAlertHours": {
+              "title": "Left-on alert after (hours)",
+              "type": "number",
+              "default": 4,
+              "minimum": 0,
+              "maximum": 24,
+              "description": "Raise an alert when the fire has been lit continuously for this long, in case it was forgotten or something is wrong. 0 = off. Uses the same sensor type as the shutdown alert."
+            },
+            "leftOnSwitchOff": {
+              "title": "Also switch the fire off when the left-on alert is raised",
+              "type": "boolean",
+              "default": false
             },
             "shutOffAfterConnectionLoss": {
               "title": "Switch the fire off after a connection loss",
@@ -199,8 +218,11 @@
             "fireplaces[].zeroPercent",
             "fireplaces[].igniteLevel",
             "fireplaces[].auxSwitch",
+            "fireplaces[].childLockSwitch",
             "fireplaces[].restoreFlameAfterAux",
-            "fireplaces[].alertSensor"
+            "fireplaces[].alertSensor",
+            "fireplaces[].leftOnAlertHours",
+            "fireplaces[].leftOnSwitchOff"
           ]
         },
         {

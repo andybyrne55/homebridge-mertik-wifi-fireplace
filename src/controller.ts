@@ -54,7 +54,8 @@ export const DEFAULT_CONTROLLER_TIMING: ControllerTiming = {
   auxFlameResetWaitMs: 4_000,
   standbyTimeoutMs: 12_000,
   sliderDebounceMs: 400,
-  reigniteLockoutMs: 30_000,
+  // Re-igniting 45-60 s after an off stopped at pilot or failed on the real unit; 3 min worked (15 Nov).
+  reigniteLockoutMs: 180_000,
   shutdownWaitMs: 20_000,
   modeSettleMs: 1_000,
   firstContactWarnMs: 60_000,
@@ -668,8 +669,8 @@ export class FireplaceController extends EventEmitter {
     if (this.lastShutdownAt !== undefined && now - this.lastShutdownAt < this.timing.reigniteLockoutMs) {
       const ago = Math.round((now - this.lastShutdownAt) / 1000);
       const wait = Math.ceil((this.timing.reigniteLockoutMs - (now - this.lastShutdownAt)) / 1000);
-      this.log.warn(`Ignite refused: the fire went off ${ago} s ago and the plugin waits ` +
-        `${Math.round(this.timing.reigniteLockoutMs / 1000)} s between off and re-ignite. Try again in ${wait} s.`);
+      this.log.warn(`Ignite refused: the fire went off ${ago} s ago and needs ${Math.round(this.timing.reigniteLockoutMs / 1000)} s ` +
+        `before it will light reliably (setting "reigniteWait"). Try again in ${wait} s.`);
       return 'failed';
     }
     this.log.info('Ignite requested');

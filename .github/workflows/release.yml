@@ -80,8 +80,13 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-      - name: Publish to npm
-        run: npm $NPM_PUBLISH_COMMAND --access public --provenance --tag ${{ steps.version.outputs.dist_tag }}
+      - name: Publish to npm (skipped if this version is already published)
+        run: |
+          if npm view "homebridge-mertik-wifi@${{ steps.version.outputs.version }}" version >/dev/null 2>&1; then
+            echo "Version ${{ steps.version.outputs.version }} is already on npm; skipping publish."
+          else
+            npm $NPM_PUBLISH_COMMAND --access public --provenance --tag ${{ steps.version.outputs.dist_tag }}
+          fi
 
       - name: Extract the release notes from CHANGELOG.md
         run: |
@@ -99,4 +104,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file release-notes.md ${{ steps.version.outputs.prerelease }}
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists; skipping."
+          else
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file release-notes.md ${{ steps.version.outputs.prerelease }}
+          fi

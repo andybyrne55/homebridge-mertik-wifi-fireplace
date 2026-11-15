@@ -25,6 +25,7 @@ export interface FireplaceConfig {
   connectionLossMinutes: number;
   pollInterval: number;
   commandRetries: number;
+  reigniteWait: number;
   debug: boolean;
 }
 
@@ -40,6 +41,7 @@ export const CONFIG_DEFAULTS = {
   connectionLossMinutes: 5,
   pollInterval: 15,
   commandRetries: 3,
+  reigniteWait: 180,
   debug: false,
 };
 
@@ -147,6 +149,7 @@ export function validateFireplace(raw: unknown): ValidationResult {
     connectionLossMinutes: num('connectionLossMinutes', CONFIG_DEFAULTS.connectionLossMinutes, 0, 1440),
     pollInterval: int('pollInterval', CONFIG_DEFAULTS.pollInterval, 5, 60),
     commandRetries: int('commandRetries', CONFIG_DEFAULTS.commandRetries, 0, 5),
+    reigniteWait: int('reigniteWait', CONFIG_DEFAULTS.reigniteWait, 30, 900),
     debug: bool('debug', CONFIG_DEFAULTS.debug),
   };
 

@@ -119,6 +119,14 @@
               "maximum": 5,
               "description": "How many times an unconfirmed off is resent before the alert trips."
             },
+            "reigniteWait": {
+              "title": "Wait before re-igniting (seconds)",
+              "type": "integer",
+              "default": 180,
+              "minimum": 30,
+              "maximum": 900,
+              "description": "After the fire goes off, switching it on again is refused for this long. On the test unit, re-igniting within 60 s of an off failed or stopped at pilot; after 3 minutes it lit normally."
+            },
             "debug": {
               "title": "Debug logging",
               "type": "boolean",
@@ -162,6 +170,7 @@
             "fireplaces[].port",
             "fireplaces[].pollInterval",
             "fireplaces[].commandRetries",
+            "fireplaces[].reigniteWait",
             "fireplaces[].shutOffAfterConnectionLoss",
             "fireplaces[].connectionLossMinutes",
             "fireplaces[].debug"

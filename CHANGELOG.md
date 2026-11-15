@@ -14,4 +14,7 @@ First public beta. Manual control only.
 - Shutdown alert sensor (contact or leak) that trips only when the fire could not be confirmed off.
 - Thermostat / eco mode set on the handset is recognised and logged (not controlled yet).
 - "No Response" in HomeKit when the fireplace is unreachable; reconnects with backoff.
+- Waits 3 minutes (configurable) between the fire going off and re-igniting; sooner, the test unit failed to light.
+- Ignition copes with the unit's real behaviour: a pause with no pilot signal after igniting, and stopping at pilot
+  (the plugin then lights the main burner itself).
 - Settings GUI for every option.

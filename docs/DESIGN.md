@@ -241,12 +241,11 @@ Debug (config `debug`): raw frames, queue activity, state transitions.
 
 - Thermostat idle vs manual standby are indistinguishable in status (mode `0000`, height `00`). Resolve before
   thermostat control.
-- Does the unit enforce a wait between off and re-ignite? (Old plugin waits 30 s.) Until known, refuse ignite
-  for 30 s after a shutdown and log why.
+- ~~Does the unit enforce a wait between off and re-ignite?~~ Effectively yes (15 Nov): re-ignite ~45 s after an
+  off stopped at pilot, ~60 s failed, 3 min and from cold lit cleanly (30–35 s). Default lockout is now 180 s,
+  configurable as `reigniteWait` (30–900 s). The exact threshold between 60 s and 3 min is unknown.
 - ~~Confirm unprompted status pushes with more than one observation.~~ Confirmed 15 Nov (behaviour 13).
-- Why did re-ignitions 45–60 s after an off stop at pilot / fail on 15 Nov, while the 14 Nov ignition was clean?
-  Candidate: the unit needs a longer wait after an off. Test an ignition after the fire has been off for a long
-  time, and one from the handset, before changing the 30 s re-ignite lockout.
+
 - Cause of the owner's intermittent "off ignored" and "fire switches itself off" with the old plugin is not
   proven (candidates: 10 s debounce + stale state, false-off flag, auto shut-off after connection loss).
 - v2: thermostat + eco control, child lock, timers if the protocol has them, Matter, verified application.

@@ -75,6 +75,7 @@ Use the plugin's settings in the Homebridge UI, or add this to `config.json`:
 | `connectionLossMinutes` | `5` | See above. |
 | `pollInterval` | `15` | Seconds between status checks when idle (5–60). While a command is checked, the plugin polls every 2 s. |
 | `commandRetries` | `3` | How many times an unconfirmed off is resent before the alert trips (0–5). |
+| `reigniteWait` | `180` | Seconds after the fire goes off before it may be lit again (30–900). Re-igniting sooner failed or stopped at pilot on the test unit. |
 | `debug` | `false` | Log every packet and status frame. |
 
 Invalid entries are reported in the log and skipped; the plugin does not crash on bad config.
@@ -90,7 +91,7 @@ Invalid entries are reported in the log and skipped; the plugin does not crash o
 | Set flame 0 % | Off, or pilot only (`zeroPercent`). |
 | Toggle Aux | Switches the back burner row, then restores your flame level. |
 | Use the handset | HomeKit follows within a few seconds and the log says "Changed on handset: …". |
-| Switch on within 30 s of switching off | Refused, with a log line saying when to try again (a safety wait between off and re-ignition). |
+| Switch on within 3 minutes of switching off | Refused, with a log line saying when to try again. The fireplace does not light reliably sooner (`reigniteWait`). |
 
 When the fireplace cannot be reached the tile shows **No Response**. The plugin keeps reconnecting in the
 background.
@@ -100,7 +101,8 @@ background.
 - **"Unreachable" or No Response.** Check that the module still has the IP address in your config (DHCP
   reservation), that it is powered, and that you can reach it from the Homebridge machine
   (`nc -vz <ip> 2000`). A brief outage is normal; the plugin reconnects by itself.
-- **"Ignite refused …".** The plugin waits 30 s between switching off and igniting again.
+- **"Ignite refused …".** The plugin waits `reigniteWait` (3 minutes by default) between the fire going off and igniting again.
+  The plugin only knows about an off it has seen; after a Homebridge restart, a quick re-ignite may fail and is reported.
 - **"Ignition failed … reports the fire is off".** The fireplace ran its ignition sequence but the pilot did not
   stay lit. The plugin does not retry automatically. Check the gas supply and try the handset.
 - **"Off NOT confirmed".** The fireplace did not confirm the off after all retries. Check the fire and use the

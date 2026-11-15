@@ -39,7 +39,7 @@ export class FireplaceAccessory {
       restoreFlameAfterAux: config.restoreFlameAfterAux,
       shutOffAfterConnectionLoss: config.shutOffAfterConnectionLoss,
       connectionLossMinutes: config.connectionLossMinutes,
-    });
+    }, { reigniteLockoutMs: config.reigniteWait * 1000 });
 
     accessory.getService(S.AccessoryInformation)!
       .setCharacteristic(C.Manufacturer, 'Mertik Maxitrol')

@@ -28,6 +28,7 @@ export interface ControllerTiming {
   offResendMs: number;
   igniteTimeoutMs: number;
   igniteBitWaitMs: number;
+  mainBurnerWaitMs: number;
   flameTimeoutMs: number;
   transientFfMs: number;
   auxTimeoutMs: number;
@@ -46,6 +47,7 @@ export const DEFAULT_CONTROLLER_TIMING: ControllerTiming = {
   offResendMs: 6_000,
   igniteTimeoutMs: 90_000,
   igniteBitWaitMs: 8_000,
+  mainBurnerWaitMs: 15_000,
   flameTimeoutMs: 12_000,
   transientFfMs: 8_000,
   auxTimeoutMs: 10_000,
@@ -334,7 +336,10 @@ export class FireplaceController extends EventEmitter {
     if (!this.busy && prev) {
       this.reportHandsetChange(prev, prevDisplay, s);
     }
-    if (!this.busy && s.state === 'on' && this.ffSince === undefined) {
+    // Remember handset changes, but not the unit's small reporting offset (that would make the
+    // remembered level drift down a few percent with every aux restore or re-ignition).
+    if (!this.busy && s.state === 'on' && this.ffSince === undefined &&
+      (this.lastFlameByte === undefined || !flameMatches(s.flameHeight, this.lastFlameByte))) {
       this.lastFlameByte = s.flameHeight;
     }
 
@@ -398,7 +403,8 @@ export class FireplaceController extends EventEmitter {
       if (what) {
         this.log.info(`Changed on handset: ${what}`);
       }
-    } else if (after === 'on' && this.ffSince === undefined && !flameMatches(this.displayHeight, prevDisplay)) {
+    } else if (after === 'on' && this.ffSince === undefined && !flameMatches(this.displayHeight, prevDisplay) &&
+      !(prev.auxOn !== s.auxOn && s.flameHeight === FLAME_MAX)) {
       this.log.info(`Changed on handset: flame ${byteToPercent(this.displayHeight)} %`);
     }
     if (prev.auxOn !== s.auxOn) {
@@ -635,9 +641,19 @@ export class FireplaceController extends EventEmitter {
         return false;
       }
     } else {
-      const lit = await this.execIgnite(token);
-      if (!lit || token.aborted) {
+      const t0 = Date.now();
+      const result = await this.execIgnite(token);
+      if (result === 'failed' || token.aborted) {
         return false;
+      }
+      if (result === 'pilot') {
+        // Pilot proven but the main burner stayed out: a flame command lights it (seen on the real unit).
+        this.log.info('Pilot lit; lighting the main burner');
+        const ok = await this.execFlame(command.flameByte ?? this.lastFlameByte ?? FLAME_MAX, token);
+        if (ok) {
+          this.log.info(`Lit after ${this.secondsSince(t0)} s`);
+        }
+        return ok;
       }
     }
     const target = command.flameByte;
@@ -647,14 +663,14 @@ export class FireplaceController extends EventEmitter {
     return true;
   }
 
-  private async execIgnite(token: Token): Promise<boolean> {
+  private async execIgnite(token: Token): Promise<'on' | 'pilot' | 'failed'> {
     const now = Date.now();
     if (this.lastShutdownAt !== undefined && now - this.lastShutdownAt < this.timing.reigniteLockoutMs) {
       const ago = Math.round((now - this.lastShutdownAt) / 1000);
       const wait = Math.ceil((this.timing.reigniteLockoutMs - (now - this.lastShutdownAt)) / 1000);
       this.log.warn(`Ignite refused: the fire went off ${ago} s ago and the plugin waits ` +
         `${Math.round(this.timing.reigniteLockoutMs / 1000)} s between off and re-ignite. Try again in ${wait} s.`);
-      return false;
+      return 'failed';
     }
     this.log.info('Ignite requested');
     const t0 = Date.now();
@@ -662,47 +678,53 @@ export class FireplaceController extends EventEmitter {
     await this.link.send(cmd.ignite(), 'ignite');
     let ok = await this.waitFor(started, this.timing.igniteBitWaitMs);
     if (token.aborted) {
-      return false;
+      return 'failed';
     }
     if (!ok) {
       this.log.warn('Ignition did not start, resending ignite');
       await this.link.send(cmd.ignite(), 'ignite (retry)');
       ok = await this.waitFor(started, this.timing.igniteBitWaitMs);
       if (token.aborted) {
-        return false;
+        return 'failed';
       }
     }
     if (!ok) {
       this.log.error('Ignite failed: the fireplace did not start the ignition sequence');
-      return false;
+      return 'failed';
     }
-    let offCount = 0;
+    // On the real unit the igniting bit can clear with no pilot flag for ~20 s before the pilot shows
+    // (seen 15 Nov 2026), so "igniting ended" is not a failure. Only the timeout or a shutdown is.
     const remaining = Math.max(0, this.timing.igniteTimeoutMs - (Date.now() - t0));
-    const ended = await this.waitFor((s) => {
-      if (s.state === 'on') {
-        return true;
-      }
-      if (s.state === 'off' || s.state === 'shuttingDown') {
-        offCount++;
-        return offCount >= 2;
-      }
-      offCount = 0;
-      return false;
-    }, remaining);
+    await this.waitFor((s) => s.state === 'on' || s.state === 'pilot' || s.shuttingDown, remaining);
     if (token.aborted) {
-      return false;
+      return 'failed';
     }
-    if (this.status?.state === 'on') {
-      this.displayHeight = this.status.flameHeight;
+    const state = this.status?.state;
+    if (state === 'on') {
+      this.displayHeight = this.status!.flameHeight;
       this.log.info(`Lit after ${this.secondsSince(t0)} s`);
-      return true;
+      return 'on';
     }
-    if (ended) {
-      this.log.error(`Ignition failed after ${this.secondsSince(t0)} s: the fireplace reports the fire is off`);
+    if (state === 'pilot') {
+      const lit = await this.waitFor((s) => s.state === 'on' || s.shuttingDown, this.timing.mainBurnerWaitMs);
+      if (token.aborted) {
+        return 'failed';
+      }
+      if (lit && this.status?.state === 'on') {
+        this.displayHeight = this.status.flameHeight;
+        this.log.info(`Lit after ${this.secondsSince(t0)} s`);
+        return 'on';
+      }
+      if (this.status?.state === 'pilot') {
+        return 'pilot';
+      }
+    }
+    if (this.status?.shuttingDown || this.status?.state === 'shuttingDown') {
+      this.log.error(`Ignition stopped after ${this.secondsSince(t0)} s: the fire was switched off`);
     } else {
-      this.log.error(`Ignition not confirmed within ${Math.round(this.timing.igniteTimeoutMs / 1000)} s`);
+      this.log.error(`Ignition failed: no pilot flame within ${Math.round(this.timing.igniteTimeoutMs / 1000)} s`);
     }
-    return false;
+    return 'failed';
   }
 
   private async execFlame(flameByte: number, token: Token, label = 'Flame'): Promise<boolean> {

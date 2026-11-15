@@ -51,6 +51,10 @@ export class FakeFireplace {
   ignoreIgnite = 0;
   /** Ignition runs, then the pilot fails and the unit goes off. */
   igniteFails = false;
+  /** Like the real unit on 15 Nov: igniting clears, no pilot flag for this long, then the pilot shows. */
+  ignitionGapMs = 0;
+  /** After ignition the main burner stays out (pilot only) until a flame command. */
+  mainBurnerStaysOut = false;
   /** Leave the next N status requests unanswered. */
   dropStatusReplies = 0;
   /** Reported height = sent + skew (for lit values below FF). */
@@ -253,12 +257,25 @@ export class FakeFireplace {
         this.guard = false;
         return;
       }
-      this.guard = true;
-      this.after(this.t.igniteFlameMs, () => {
-        if (this.guard && !this.shuttingDown) {
-          this.height = 0xff;
+      const pilot = () => {
+        if (this.shuttingDown) {
+          return;
         }
-      });
+        this.guard = true;
+        if (this.mainBurnerStaysOut) {
+          return;
+        }
+        this.after(this.t.igniteFlameMs, () => {
+          if (this.guard && !this.shuttingDown) {
+            this.height = 0xff;
+          }
+        });
+      };
+      if (this.ignitionGapMs > 0) {
+        this.after(this.ignitionGapMs, pilot);
+      } else {
+        pilot();
+      }
     });
   }
 

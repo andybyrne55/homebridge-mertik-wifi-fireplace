@@ -4,7 +4,7 @@ import { after, afterEach, describe, it } from 'node:test';
 import { Connection, type ConnectionTiming } from '../src/connection.js';
 import { FireplaceController, type ControllerOptions, type ControllerTiming, type FireplaceView } from '../src/controller.js';
 import { FireplaceLogger, type LogSink } from '../src/logger.js';
-import { byteToPercent } from '../src/protocol/flame.js';
+import { byteToPercent, percentToByte } from '../src/protocol/flame.js';
 import { FakeFireplace } from './fake-fireplace.js';
 
 const FAST_CONN: Partial<ConnectionTiming> = {
@@ -23,6 +23,7 @@ const FAST_CTRL: Partial<ControllerTiming> = {
   offResendMs: 300,
   igniteTimeoutMs: 3_000,
   igniteBitWaitMs: 300,
+  mainBurnerWaitMs: 400,
   flameTimeoutMs: 600,
   transientFfMs: 400,
   auxTimeoutMs: 500,
@@ -220,8 +221,31 @@ describe('ignite', () => {
     });
     assert.equal(await ctrl.requestOn(), false);
     assert.equal(fake.count('1A'), 1);
-    assert.ok(has(logs, 'Ignition failed'));
+    assert.ok(has(logs, 'Ignition failed: no pilot flame'));
     assert.equal(ctrl.view.power, 'off');
+  });
+
+  it('waits through the no-pilot gap after igniting (real unit, 15 Nov)', async () => {
+    const { ctrl, fake, logs } = await setup((f) => {
+      f.ignitionGapMs = 800;
+    });
+    assert.equal(await ctrl.requestOn(), true);
+    assert.equal(fake.count('1A'), 1);
+    assert.equal(ctrl.lastStatus?.state, 'on');
+    assert.ok(has(logs, 'Lit after'));
+  });
+
+  it('lights the main burner with a flame command when ignition stops at pilot', async () => {
+    const { ctrl, fake, logs } = await setup((f) => {
+      f.ignitionGapMs = 500;
+      f.mainBurnerStaysOut = true;
+    }, { igniteLevel: 50 });
+    assert.equal(await ctrl.requestOn(), true);
+    assert.equal(fake.count('1A'), 1);
+    assert.equal(ctrl.lastStatus?.state, 'on');
+    assert.ok(Math.abs(ctrl.lastStatus!.flameHeight - percentToByte(50)) <= 8);
+    assert.ok(has(logs, 'Pilot lit; lighting the main burner'));
+    assert.ok(has(logs, 'Lit after'));
   });
 
   it('times out if the fire never lights', async () => {
@@ -447,5 +471,21 @@ describe('HomeKit quirks', () => {
     assert.equal(await flame, true);
     assert.equal(fake.count('16'), 1);
     assert.equal(fake.count('1A'), 0);
+  });
+});
+
+describe('real-hardware regressions', () => {
+  it('repeated aux changes do not make the remembered flame level drift', async () => {
+    const { ctrl, fake } = await setup((f) => {
+      f.setOn(0xff, true);
+      f.heightSkew = -4;
+    });
+    assert.equal(await ctrl.requestFlame(0xd9), true);
+    for (const on of [false, true, false, true]) {
+      await sleep(400);
+      assert.equal(await ctrl.requestAux(on), true);
+    }
+    const sent = fake.received.filter((c) => c.startsWith('16')).map((c) => c.substring(2));
+    assert.deepEqual(sent, ['D9', 'D9', 'D9', 'D9', 'D9'], 'always restores the level that was asked for');
   });
 });

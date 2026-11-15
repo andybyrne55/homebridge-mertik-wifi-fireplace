@@ -98,6 +98,15 @@ Observed flag values: `820A` off (aux on), `821A` igniting, `828A` on + aux on, 
 10. Ignite: igniting bit at once; guard on after ~25–35 s; height `FF` ~4–7 s later. Total ≈ 40 s.
 11. Off: shutdown bit within ~1–2 s, height `00` within ~10 s, then guard off.
 12. Handset changes appear in status (flame down → `77`, `64`; aux on → aux bit + `FF`).
+13. (15 Nov, first plugin test) Status is pushed to every connected client when anything changes: a second
+    client polling every 15 s logged each change made by another client within 1–2 s.
+14. (15 Nov) Ignition is not always the clean sequence in 10. Re-igniting ~45 s after an off: igniting for ~27 s,
+    then igniting cleared with NO guard bit for ~19 s, then guard on but the main burner stayed out (pilot only)
+    until a flame command (relit in ~9 s). A second re-ignite ~60 s after an off: igniting for ~40 s (top flag bit
+    cleared after 30 s, flags `021A`), then off with no pilot – a real failed ignition. Handle: never treat
+    "igniting ended" as failure; wait for pilot/on until the timeout; from pilot, send a flame command.
+15. (15 Nov) The reported flame height settles a few counts below what was sent (D9 → D5 → D2 if you keep
+    re-sending the reported value). Remember the level that was asked for, not the reported one.
 
 ### State derivation (from one status frame + short history)
 - `shuttingDown` if bit 7.
@@ -234,7 +243,10 @@ Debug (config `debug`): raw frames, queue activity, state transitions.
   thermostat control.
 - Does the unit enforce a wait between off and re-ignite? (Old plugin waits 30 s.) Until known, refuse ignite
   for 30 s after a shutdown and log why.
-- Confirm unprompted status pushes with more than one observation.
+- ~~Confirm unprompted status pushes with more than one observation.~~ Confirmed 15 Nov (behaviour 13).
+- Why did re-ignitions 45–60 s after an off stop at pilot / fail on 15 Nov, while the 14 Nov ignition was clean?
+  Candidate: the unit needs a longer wait after an off. Test an ignition after the fire has been off for a long
+  time, and one from the handset, before changing the 30 s re-ignite lockout.
 - Cause of the owner's intermittent "off ignored" and "fire switches itself off" with the old plugin is not
   proven (candidates: 10 s debounce + stale state, false-off flag, auto shut-off after connection loss).
 - v2: thermostat + eco control, child lock, timers if the protocol has them, Matter, verified application.

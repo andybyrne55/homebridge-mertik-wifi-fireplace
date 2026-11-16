@@ -34,6 +34,14 @@ describe('config validation', () => {
     assert.equal(config, undefined);
     assert.ok(errors.some((e) => e.includes('"port"')));
   });
+  it('defaults to no re-ignite wait and accepts 0', () => {
+    assert.equal(CONFIG_DEFAULTS.reigniteWait, 0);
+    const { config, warnings } = validateFireplace({ name: 'Fire', ip: '192.168.1.101', reigniteWait: 0 });
+    assert.equal(config?.reigniteWait, 0);
+    assert.deepEqual(warnings, []);
+    assert.equal(validateFireplace({ name: 'Fire', ip: '192.168.1.101', reigniteWait: 90 }).config?.reigniteWait, 90);
+  });
+
   it('replaces bad optional settings with defaults and warns', () => {
     const { config, errors, warnings } = validateFireplace({
       name: 'Fire', ip: '192.168.1.101', pollInterval: 2, commandRetries: 9, tileType: 'lightbulb', igniteLevel: 0, debug: 'yes',

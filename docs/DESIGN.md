@@ -251,6 +251,9 @@ Debug (config `debug`): raw frames, queue activity, state transitions.
   configurable as `reigniteWait` (30–900 s). The exact threshold between 60 s and 3 min is unknown.
   Since 1.0.1 a switch-on inside the lockout is accepted and waits it out (an off cancels it) instead of being refused:
   on 16 Nov the owner was blocked twice after a failed ignition and could not tell why.
+  16 Nov evening (very windy): ignitions failed at 90 s, 2 min and 5 min after an off, and the handset failed too, so the
+  failures are put down to wind at the flue, not timing. Default `reigniteWait` is now 0 (no wait, like the handset);
+  to be confirmed on a calm evening by relighting ~30 s and ~60 s after an off.
 - ~~Confirm unprompted status pushes with more than one observation.~~ Confirmed 15 Nov (behaviour 13).
 
 - v2: thermostat + eco control, child lock, verified application. Timers: not in the plugin – use Home app

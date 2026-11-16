@@ -5,8 +5,10 @@ All notable changes to this project are documented here. This project uses [sema
 ## [1.0.1]
 
 ### Changed
-- Switching on within `reigniteWait` (3 minutes) of the fire going off, or of a failed ignition, is no longer refused:
-  the tile shows on and the fire lights by itself once the wait is over. Switching off cancels it.
+- No wait before relighting by default (`reigniteWait` 0, was 180 s): a switch-on lights the fire straight away, like
+  the handset. The failures that led to the 3-minute wait are now thought to be wind at the flue, not timing.
+- With a `reigniteWait` set, a switch-on inside the wait is no longer refused: the tile shows on and the fire lights by
+  itself once the wait is over. Switching off cancels it.
 - The release workflow is ready for npm trusted publishing (provenance linking each version to its source commit).
 
 ## [1.0.0]

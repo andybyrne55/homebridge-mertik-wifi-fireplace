@@ -191,10 +191,10 @@
             "reigniteWait": {
               "title": "Wait before re-igniting (seconds)",
               "type": "integer",
-              "default": 180,
-              "minimum": 30,
+              "default": 0,
+              "minimum": 0,
               "maximum": 900,
-              "description": "After the fire goes off (or an ignition fails), a switch-on waits this long and then lights the fire. On the test unit, re-igniting within 60 s of an off failed or stopped at pilot; after 3 minutes it lit normally."
+              "description": "0 = no wait: a switch-on lights the fire straight away, like the handset. If your fireplace does not relight reliably soon after going off, set a wait: a switch-on within this time after an off (or a failed ignition) waits and then lights the fire."
             },
             "debug": {
               "title": "Debug logging",

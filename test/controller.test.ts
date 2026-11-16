@@ -78,6 +78,7 @@ async function setup(
   prepare: (fake: FakeFireplace) => void = () => undefined,
   options: Partial<ControllerOptions> = {},
   connTiming: Partial<ConnectionTiming> = {},
+  ctrlTiming: Partial<ControllerTiming> = {},
 ): Promise<Rig> {
   const fake = new FakeFireplace();
   prepare(fake);
@@ -91,7 +92,7 @@ async function setup(
   };
   const log = new FireplaceLogger(sink, 'Fire', false);
   const conn = new Connection('127.0.0.1', fake.port, log, { ...FAST_CONN, ...connTiming });
-  const ctrl = new FireplaceController(conn, log, { ...DEFAULT_OPTIONS, ...options }, FAST_CTRL);
+  const ctrl = new FireplaceController(conn, log, { ...DEFAULT_OPTIONS, ...options }, { ...FAST_CTRL, ...ctrlTiming });
   const views: FireplaceView[] = [];
   ctrl.on('update', (v: FireplaceView) => views.push(v));
   conn.start();
@@ -278,6 +279,14 @@ describe('ignite', () => {
     assert.ok(Date.now() - t0 >= 400, 'waited for the lockout');
     assert.equal(fake.count('1A'), 1);
     assert.equal(ctrl.lastStatus?.state, 'on');
+  });
+
+  it('with no wait set (the default), a switch-on straight after an off lights at once, like the handset', async () => {
+    const { ctrl, fake, logs } = await setup((f) => f.setOn(), {}, {}, { reigniteLockoutMs: 0 });
+    assert.equal(await ctrl.requestOff(), true);
+    assert.equal(await ctrl.requestOn(), true);
+    assert.equal(fake.count('1A'), 1);
+    assert.ok(!has(logs, 'lighting in'));
   });
 
   it('an off during the lockout wait cancels the ignition', async () => {

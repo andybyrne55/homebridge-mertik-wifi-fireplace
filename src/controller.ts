@@ -63,7 +63,7 @@ export const DEFAULT_CONTROLLER_TIMING: ControllerTiming = {
   standbyTimeoutMs: 12_000,
   sliderDebounceMs: 400,
   // Re-igniting 45-60 s after an off stopped at pilot or failed on the real unit; 3 min worked (15 Nov).
-  reigniteLockoutMs: 180_000,
+  reigniteLockoutMs: 0,
   shutdownWaitMs: 20_000,
   modeSettleMs: 1_000,
   firstContactWarnMs: 60_000,

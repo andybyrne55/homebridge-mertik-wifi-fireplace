@@ -886,11 +886,37 @@ export class FireplaceController extends EventEmitter {
   private async execIgnite(token: Token): Promise<'on' | 'pilot' | 'failed'> {
     const now = Date.now();
     if (this.lastShutdownAt !== undefined && now - this.lastShutdownAt < this.timing.reigniteLockoutMs) {
+      // Re-igniting soon after an off (or a failed ignition) is unreliable, so wait out the rest of reigniteWait and
+      // then light. Switching off cancels the wait; if the fire is lit some other way meanwhile, use that.
       const ago = Math.round((now - this.lastShutdownAt) / 1000);
-      const wait = Math.ceil((this.timing.reigniteLockoutMs - (now - this.lastShutdownAt)) / 1000);
-      this.log.warn(`Ignite refused: the fire went off ${ago} s ago and needs ${Math.round(this.timing.reigniteLockoutMs / 1000)} s ` +
-        `before it will light reliably (setting "reigniteWait"). Try again in ${wait} s.`);
-      return 'failed';
+      const waitMs = this.timing.reigniteLockoutMs - (now - this.lastShutdownAt);
+      this.log.info(`The fire went off ${ago} s ago; lighting in ${Math.ceil(waitMs / 1000)} s ` +
+        `(it needs ${Math.round(this.timing.reigniteLockoutMs / 1000)} s to light reliably, setting "reigniteWait")`);
+      await this.waitFor((s) => s.state !== 'off' && s.state !== 'shuttingDown', waitMs);
+      if (token.aborted) {
+        this.log.info('Waiting to light: cancelled');
+        return 'failed';
+      }
+      const s = this.status?.state;
+      if (s === 'igniting') {
+        await this.waitFor((st) => st.state === 'on' || st.state === 'pilot' || st.state === 'off', this.timing.igniteTimeoutMs);
+        if (token.aborted) {
+          return 'failed';
+        }
+      }
+      const after = this.status?.state;
+      if (after === 'on') {
+        this.displayHeight = this.status!.flameHeight;
+        this.log.info('Lit while waiting (handset)');
+        return 'on';
+      }
+      if (after === 'pilot') {
+        return 'pilot';
+      }
+      if (after !== 'off') {
+        this.log.warn(`Not lighting: the fire is ${after ?? 'in an unknown state'}`);
+        return 'failed';
+      }
     }
     this.log.info('Ignite requested');
     const t0 = Date.now();

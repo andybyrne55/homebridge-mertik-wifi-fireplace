@@ -4,11 +4,10 @@ All notable changes to this project are documented here. This project uses [sema
 
 ## [1.0.1]
 
-No functional changes.
-
 ### Changed
-- Releases are now published from GitHub Actions with npm trusted publishing, so each version on npm carries
-  provenance linking it to the exact source commit and build.
+- Switching on within `reigniteWait` (3 minutes) of the fire going off, or of a failed ignition, is no longer refused:
+  the tile shows on and the fire lights by itself once the wait is over. Switching off cancels it.
+- The release workflow is ready for npm trusted publishing (provenance linking each version to its source commit).
 
 ## [1.0.0]
 

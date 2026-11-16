@@ -85,7 +85,7 @@ Use the plugin's settings in the Homebridge UI, or add this to `config.json`:
 | `connectionLossMinutes` | `5` | See above. |
 | `pollInterval` | `15` | Seconds between status checks when idle (5–60). While a command is checked, the plugin polls every 2 s. Changes from the handset show up straight away regardless, because the fireplace reports them itself. |
 | `commandRetries` | `3` | How many times an unconfirmed off is resent before the alert trips (0–5). |
-| `reigniteWait` | `180` | Seconds after the fire goes off before it may be lit again (30–900). Re-igniting sooner failed or stopped at pilot on the test unit. |
+| `reigniteWait` | `180` | Seconds after the fire goes off (or a failed ignition) before it is lit again (30–900). A switch-on sooner waits and then lights. Re-igniting sooner failed or stopped at pilot on the test unit. |
 | `debug` | `false` | Log every packet and status frame. |
 
 An invalid setting is reported in the log and its default is used instead. A fireplace with a missing or invalid name or IP address is skipped (its existing HomeKit accessory is kept until the config is fixed). The plugin never crashes on bad config.
@@ -104,7 +104,7 @@ An invalid setting is reported in the log and its default is used instead. A fir
 | Set the target temperature while the fire is off | Saved only – the fire stays off. The next time you switch it on, it starts in thermostat mode at that target. |
 | Turn on the child lock | HomeKit and automations can no longer light the fire (from off or from pilot) or change it; off always works. |
 | Use the handset | HomeKit follows within a few seconds and the log says "Changed on handset: …". |
-| Switch on within 3 minutes of switching off | Refused, with a log line saying when to try again. The fireplace does not light reliably sooner (`reigniteWait`). |
+| Switch on within 3 minutes of switching off (or of a failed ignition) | Accepted: the tile shows on and the fire lights by itself once the 3 minutes are up; the log says when. Switching off cancels it. The fireplace does not light reliably sooner (`reigniteWait`). |
 
 When the fireplace cannot be reached the tile shows **No Response**. The plugin keeps reconnecting in the
 background.
@@ -132,8 +132,9 @@ fire has been left on.
 - **"Unreachable" or No Response.** Check that the module still has the IP address in your config (DHCP
   reservation), that it is powered, and that you can reach it from the Homebridge machine
   (`nc -vz <ip> 2000`). A brief outage is normal; the plugin reconnects by itself.
-- **"Ignite refused …".** The plugin waits `reigniteWait` (3 minutes by default) between the fire going off and igniting again.
-  The plugin only knows about an off it has seen; after a Homebridge restart, a quick re-ignite may fail and is reported.
+- **"The fire went off … s ago; lighting in … s".** The plugin waits `reigniteWait` (3 minutes by default) between the fire
+  going off (or a failed ignition) and igniting again, then lights it by itself. The plugin only knows about an off it has
+  seen; after a Homebridge restart, a quick re-ignite may fail and is reported.
 - **"Ignition failed: no pilot flame …".** The fireplace ran its ignition sequence but the pilot did not
   light. The plugin does not retry automatically. Check the gas supply and try the handset.
 - **"Off NOT confirmed".** The fireplace did not confirm the off after all retries. Check the fire and use the

@@ -266,11 +266,41 @@ describe('ignite', () => {
     assert.ok(Date.now() - t0 >= 2_500, 'waited for the ignite timeout');
   });
 
-  it('refuses to re-ignite within the lockout after a shutdown', async () => {
-    const { ctrl, logs } = await setup((f) => f.setOn());
+  it('waits out the lockout after a shutdown, then lights', async () => {
+    const { ctrl, fake, logs } = await setup((f) => f.setOn());
     assert.equal(await ctrl.requestOff(), true);
+    const t0 = Date.now();
+    const on = ctrl.requestOn();
+    await waitUntil(() => has(logs, 'lighting in'), 1_000, 'wait announced');
+    assert.equal(fake.count('1A'), 0, 'no ignite during the lockout');
+    assert.equal(ctrl.view.power, 'on', 'HomeKit keeps showing on while it waits');
+    assert.equal(await on, true);
+    assert.ok(Date.now() - t0 >= 400, 'waited for the lockout');
+    assert.equal(fake.count('1A'), 1);
+    assert.equal(ctrl.lastStatus?.state, 'on');
+  });
+
+  it('an off during the lockout wait cancels the ignition', async () => {
+    const { ctrl, fake, logs } = await setup((f) => f.setOn());
+    assert.equal(await ctrl.requestOff(), true);
+    const on = ctrl.requestOn();
+    await waitUntil(() => has(logs, 'lighting in'), 1_000, 'wait announced');
+    assert.equal(await ctrl.requestOff(), true);
+    assert.equal(await on, false);
+    await sleep(800);
+    assert.equal(fake.count('1A'), 0, 'never ignited');
+    assert.ok(has(logs, 'Waiting to light: cancelled'));
+  });
+
+  it('after a failed ignition the next request lights (not refused)', async () => {
+    const { ctrl, fake, logs } = await setup();
+    (fake as unknown as { igniteFails: boolean }).igniteFails = true;
     assert.equal(await ctrl.requestOn(), false);
-    assert.ok(has(logs, 'Ignite refused'));
+    await waitUntil(() => ctrl.lastStatus?.state === 'off', 2_000, 'off after the failure');
+    (fake as unknown as { igniteFails: boolean }).igniteFails = false;
+    assert.equal(await ctrl.requestOn(), true);
+    assert.ok(!has(logs, 'refused'));
+    assert.equal(ctrl.lastStatus?.state, 'on');
   });
 
   it('applies the ignite level after lighting', async () => {
@@ -604,14 +634,12 @@ describe('thermostat', () => {
     assert.equal(ctrl.lastStatus?.state, 'pilot');
   });
 
-  it('a saved target survives a refused switch-on', async () => {
+  it('a saved target is applied when a switch-on had to wait for the re-ignite delay', async () => {
     const { ctrl } = await setup((f) => f.setOn(0xff));
     assert.equal(await ctrl.requestOff(), true);
     assert.equal(await ctrl.requestThermostat(22), true);
-    assert.equal(await ctrl.requestOn(), false, 'refused: re-ignite wait');
     assert.equal(ctrl.view.targetTemperature, 22);
-    await sleep(700);
-    assert.equal(await ctrl.requestOn(), true);
+    assert.equal(await ctrl.requestOn(), true, 'waited, then lit');
     assert.equal(ctrl.lastStatus?.mode, 'thermostat');
     assert.equal(ctrl.lastStatus?.targetTemperature, 22);
   });

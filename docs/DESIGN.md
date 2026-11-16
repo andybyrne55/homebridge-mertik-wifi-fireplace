@@ -249,6 +249,8 @@ Debug (config `debug`): raw frames, queue activity, state transitions.
 - ~~Does the unit enforce a wait between off and re-ignite?~~ Effectively yes (15 Nov): re-ignite ~45 s after an
   off stopped at pilot, ~60 s failed, 3 min and from cold lit cleanly (30–35 s). Default lockout is now 180 s,
   configurable as `reigniteWait` (30–900 s). The exact threshold between 60 s and 3 min is unknown.
+  Since 1.0.1 a switch-on inside the lockout is accepted and waits it out (an off cancels it) instead of being refused:
+  on 16 Nov the owner was blocked twice after a failed ignition and could not tell why.
 - ~~Confirm unprompted status pushes with more than one observation.~~ Confirmed 15 Nov (behaviour 13).
 
 - v2: thermostat + eco control, child lock, verified application. Timers: not in the plugin – use Home app

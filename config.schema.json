@@ -194,7 +194,7 @@
               "default": 180,
               "minimum": 30,
               "maximum": 900,
-              "description": "After the fire goes off, switching it on again is refused for this long. On the test unit, re-igniting within 60 s of an off failed or stopped at pilot; after 3 minutes it lit normally."
+              "description": "After the fire goes off (or an ignition fails), a switch-on waits this long and then lights the fire. On the test unit, re-igniting within 60 s of an off failed or stopped at pilot; after 3 minutes it lit normally."
             },
             "debug": {
               "title": "Debug logging",
